@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.tbcare"
+    namespace = "com.mobile.tbconsult"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 

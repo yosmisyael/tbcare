@@ -1,4 +1,4 @@
-package com.example.tbcare
+package com.mobile.tbconsult
 
 import io.flutter.embedding.android.FlutterActivity
 

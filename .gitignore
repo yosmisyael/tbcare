@@ -11,6 +11,7 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
+.metadata
 
 # IntelliJ related
 *.iml
@@ -27,6 +28,7 @@ migrate_working_dir/
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
+.flutter-plugins
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
@@ -44,3 +46,35 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 .env
+
+# Non-Android platforms (not used)
+/ios/
+/linux/
+/macos/
+/web/
+/windows/
+
+# Agent / tool runtime data
+.omo/
+.sisyphus/
+AGENTS.md
+**/AGENTS.md
+
+# Binary / reference assets (not for VCS)
+/mockup/
+/sources/
+flutter_02.png
+
+# Root-level venv
+.venv/
+
+# Python Backend
+backend/__pycache__/
+backend/**/__pycache__/
+backend/.venv/
+backend/*.egg-info/
+backend/.pytest_cache/
+backend/.ruff_cache/
+backend/.mypy_cache/
+backend/dist/
+backend/.env

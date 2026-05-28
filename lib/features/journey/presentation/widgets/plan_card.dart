@@ -1,45 +1,45 @@
+import 'package:TBConsult/features/journey/domain/entities/journey_entity.dart';
 import 'package:flutter/material.dart';
-import 'package:TBConsult/features/journey/presentation/pages/adjust_journey_page.dart';
-import '../../../../core/theme/app_colors.dart';
-import '../../domain/entities/medication_plan_entity.dart';
 
 class PlanCard extends StatelessWidget {
-  final MedicationPlanEntity plan;
+  final JourneyListItem journey;
+  final VoidCallback onTap;
 
-  const PlanCard({super.key, required this.plan});
+  const PlanCard({super.key, required this.journey, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final isActive = plan.status == PlanStatus.active;
-    final accentColor = isActive ? AppColors.primary : Colors.grey[400]!;
-    final badgeBgColor = isActive ? AppColors.primaryLight : Colors.grey[200]!;
-    final badgeTextColor = isActive ? AppColors.primary : Colors.grey[600]!;
+    final isActive = journey.status.toLowerCase() == 'active';
+    final accentColor = isActive ? const Color(0xFF005B4F) : Colors.grey[400]!;
+    final badgeBgColor = isActive ? const Color(0xFF67E5CE) : Colors.grey[200]!;
+    final badgeTextColor = isActive
+        ? const Color(0xFF005B4F)
+        : Colors.grey[600]!;
 
     return GestureDetector(
-      onTap: () {
-        if (isActive) {
-          Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => AdjustJourneyPage())
-          );
-        }
-      },
+      onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
-        clipBehavior: Clip.antiAlias, // Biar radius sudutnya rapi nutupin garis aksen
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey[200]!),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Garis tebal di kiri
+              // Left Accent Line
               Container(width: 8, color: accentColor),
 
-              // Isi Card
+              // Card Content
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -52,9 +52,11 @@ class PlanCard extends StatelessWidget {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              // Badge Active/Completed
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
                                 decoration: BoxDecoration(
                                   color: badgeBgColor,
                                   borderRadius: BorderRadius.circular(20),
@@ -63,71 +65,102 @@ class PlanCard extends StatelessWidget {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Icon(
-                                      isActive ? Icons.circle : Icons.check_circle_outline,
-                                      size: 12,
+                                      isActive
+                                          ? Icons.circle
+                                          : Icons.check_circle_outline,
+                                      size: 10,
                                       color: badgeTextColor,
                                     ),
-                                    const SizedBox(width: 6),
+                                    const SizedBox(width: 4),
                                     Text(
                                       isActive ? 'Active' : 'Completed',
                                       style: TextStyle(
                                         color: badgeTextColor,
                                         fontWeight: FontWeight.bold,
-                                        fontSize: 12,
+                                        fontSize: 11,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-                              // Tombol Arrow Kanan
                               CircleAvatar(
-                                radius: 16,
+                                radius: 14,
                                 backgroundColor: Colors.grey[200],
-                                child: const Icon(Icons.chevron_right, color: Colors.black54, size: 20),
-                              )
+                                child: const Icon(
+                                  Icons.chevron_right,
+                                  color: Colors.black54,
+                                  size: 18,
+                                ),
+                              ),
                             ],
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                           Text(
-                            plan.title,
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            journey.name,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                           Row(
                             children: [
-                              const Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey),
-                              const SizedBox(width: 8),
-                              Text(plan.dateRange, style: const TextStyle(color: Colors.grey)),
+                              Icon(
+                                Icons.calendar_today_outlined,
+                                size: 14,
+                                color: Colors.grey[600],
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                '${_formatDate(journey.startDate)} - ${journey.endDate != null ? _formatDate(journey.endDate!) : "Ongoing"}',
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 13,
+                                ),
+                              ),
                             ],
                           ),
                         ],
                       ),
                     ),
 
-                    // Bagian Bawah Khusus untuk "Active"
-                    if (isActive && plan.trackStatus != null) ...[
+                    if (isActive) ...[
                       Divider(height: 1, color: Colors.grey[200]),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[50],
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
                         ),
+                        width: double.infinity,
+                        color: const Color(0xFFFCFCFC),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             const Text(
                               'STATUS',
-                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1),
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey,
+                                letterSpacing: 1,
+                              ),
                             ),
                             Text(
-                              plan.trackStatus!,
-                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary),
+                              journey.onTrack ? 'On Track' : 'Needs Attention',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: journey.onTrack
+                                    ? const Color(0xFF005B4F)
+                                    : Colors.orange,
+                              ),
                             ),
                           ],
                         ),
-                      )
-                    ]
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -136,5 +169,23 @@ class PlanCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _formatDate(DateTime dt) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[dt.month - 1]} ${dt.year}';
   }
 }

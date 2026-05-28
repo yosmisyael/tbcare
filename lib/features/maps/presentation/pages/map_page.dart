@@ -1,7 +1,15 @@
+import 'dart:async';
+
+import 'package:TBConsult/features/maps/presentation/widgets/map_filter_sheet.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
-import '../../../../core/theme/app_colors.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+
+import 'package:TBConsult/core/theme/app_colors.dart';
+import 'package:TBConsult/features/maps/domain/entities/facility_entity.dart';
+import 'package:TBConsult/features/maps/presentation/cubit/map_cubit.dart';
+import 'package:TBConsult/features/maps/presentation/cubit/map_state.dart';
+import 'package:TBConsult/features/maps/presentation/widgets/facility_detail_sheet.dart';
 
 class MapPage extends StatefulWidget {
   const MapPage({super.key});
@@ -11,160 +19,370 @@ class MapPage extends StatefulWidget {
 }
 
 class _MapPageState extends State<MapPage> {
-  final MapController _mapController = MapController();
+  final Completer<GoogleMapController> _mapController = Completer();
+  final TextEditingController _searchCtrl = TextEditingController();
 
-  static const LatLng _initialCenter = LatLng(-6.2000, 106.8166);
+  static const _surabayaCenter = LatLng(-7.2575, 112.7521);
+  static const _initialZoom = 12.5;
 
-  final List<Marker> _markers = [
-    Marker(
-      point: const LatLng(-6.2000, 106.8166),
-      width: 80,
-      height: 80,
-      child: const Icon(Icons.location_on, color: Colors.red, size: 40),
-    ),
-    Marker(
-      point: const LatLng(-6.2050, 106.8200),
-      width: 80,
-      height: 80,
-      child: const Icon(Icons.local_pharmacy, color: Colors.blue, size: 40),
-    ),
-    Marker(
-      point: const LatLng(-6.1950, 106.8100),
-      width: 80,
-      height: 80,
-      child: const Icon(Icons.science, color: Colors.green, size: 40),
-    ),
-  ];
+  // ── Marker BitmapDescriptors ─────────────────────────────────────────
+  final Map<FacilityType, BitmapDescriptor> _markerIcons = {};
 
-  int _activeCategoryIndex = -1;
+  @override
+  void initState() {
+    super.initState();
+    context.read<MapCubit>().initialize();
+    _loadMarkerIcons();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadMarkerIcons() async {
+    // Use default hue-tinted markers matching each facility type
+    _markerIcons[FacilityType.hospital] = BitmapDescriptor.defaultMarkerWithHue(
+      BitmapDescriptor.hueAzure,
+    );
+    _markerIcons[FacilityType.clinic] = BitmapDescriptor.defaultMarkerWithHue(
+      BitmapDescriptor.hueGreen,
+    );
+    _markerIcons[FacilityType.pharmacy] = BitmapDescriptor.defaultMarkerWithHue(
+      BitmapDescriptor.hueOrange,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          FlutterMap(
-            mapController: _mapController,
-            options: const MapOptions(
-              initialCenter: _initialCenter,
-              initialZoom: 13.0,
-            ),
+      body: BlocConsumer<MapCubit, MapState>(
+        listener: _onStateChange,
+        builder: (context, state) {
+          return Stack(
             children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.tbconsult',
+              // ── Google Map ────────────────────────────────────────
+              _buildMap(state),
+
+              // ── Top overlay: search + chips ───────────────────────
+              Positioned(
+                top: MediaQuery.of(context).padding.top + 8,
+                left: 16,
+                right: 16,
+                child: Column(
+                  children: [
+                    _buildSearchBar(state),
+                    const SizedBox(height: 10),
+                    _buildChips(state),
+                  ],
+                ),
               ),
-              MarkerLayer(markers: _markers),
+
+              // ── My location FAB ───────────────────────────────────
+              Positioned(
+                bottom: 24,
+                right: 16,
+                child: FloatingActionButton(
+                  mini: true,
+                  backgroundColor: Colors.white,
+                  onPressed: _recenterToUser,
+                  child: Icon(Icons.my_location, color: AppColors.primary),
+                ),
+              ),
+
+              // ── Loading overlay ───────────────────────────────────
+              if (state is MapLoading)
+                const Center(child: CircularProgressIndicator()),
             ],
-          ),
-          Positioned(
-            top: 40,
-            left: 20,
-            right: 20,
-            child: Column(
-              children: [
-                _buildBackButton(context),
-                const SizedBox(height: 12),
-                _buildSearchBar(),
-                const SizedBox(height: 12),
-                _buildCategoryChips(),
-              ],
-            ),
-          ),
-          Positioned(
-            bottom: 30,
-            right: 20,
-            child: FloatingActionButton(
-              backgroundColor: AppColors.primary,
-              onPressed: () {
-                _mapController.move(_initialCenter, 13.0);
-              },
-              child: const Icon(Icons.my_location, color: Colors.white),
-            ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildBackButton(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: CircleAvatar(
-        backgroundColor: Colors.white,
-        child: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
+  // ── Map widget ────────────────────────────────────────────────────────
+
+  Widget _buildMap(MapState state) {
+    Set<Marker> markers = {};
+    Set<Polyline> polylines = {};
+    LatLng? userLocation;
+
+    if (state is MapLoaded || state is MapRoutingLoading) {
+      final loaded = state is MapLoaded
+          ? state
+          : (state as MapRoutingLoading).previous;
+      userLocation = loaded.userLocation;
+
+      markers = _buildMarkers(loaded.filteredFacilities);
+
+      if (loaded.userLocation != null) {
+        markers.add(
+          Marker(
+            markerId: const MarkerId('_user'),
+            position: loaded.userLocation!,
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueYellow,
+            ),
+            infoWindow: const InfoWindow(title: 'Lokasi Anda'),
+          ),
+        );
+      }
+
+      if (loaded.routePoints.isNotEmpty) {
+        polylines.add(
+          Polyline(
+            polylineId: const PolylineId('route'),
+            points: loaded.routePoints,
+            color: AppColors.primary,
+            width: 4,
+            patterns: [],
+          ),
+        );
+      }
+    }
+
+    return GoogleMap(
+      initialCameraPosition: CameraPosition(
+        target: userLocation ?? _surabayaCenter,
+        zoom: _initialZoom,
       ),
+      onMapCreated: (c) => _mapController.complete(c),
+      markers: markers,
+      polylines: polylines,
+      myLocationEnabled: true,
+      myLocationButtonEnabled: false,
+      zoomControlsEnabled: false,
+      mapToolbarEnabled: false,
+      onTap: (_) => context.read<MapCubit>().clearSelection(),
     );
   }
 
-  Widget _buildSearchBar() {
+  Set<Marker> _buildMarkers(List<FacilityEntity> facilities) {
+    return facilities.map((f) {
+      return Marker(
+        markerId: MarkerId(f.id),
+        position: LatLng(f.lat, f.lng),
+        icon: _markerIcons[f.type] ?? BitmapDescriptor.defaultMarker,
+        infoWindow: InfoWindow(title: f.name, snippet: f.type.label),
+        onTap: () {
+          context.read<MapCubit>().selectFacility(f);
+          _showDetailSheet(f);
+        },
+      );
+    }).toSet();
+  }
+
+  // ── Search bar ────────────────────────────────────────────────────────
+
+  Widget _buildSearchBar(MapState state) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(30),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
-      child: const TextField(
+      child: TextField(
+        controller: _searchCtrl,
+        onChanged: (q) => context.read<MapCubit>().search(q),
         textAlignVertical: TextAlignVertical.center,
         decoration: InputDecoration(
           hintText: 'Search clinics, pharmacies...',
+          hintStyle: const TextStyle(color: AppColors.textSecondary),
           border: InputBorder.none,
-          prefixIcon: Icon(Icons.search, color: AppColors.textSecondary),
-          suffixIcon: Icon(Icons.tune, color: AppColors.textSecondary),
-          contentPadding: EdgeInsets.symmetric(vertical: 16),
+          prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
+          suffixIcon: IconButton(
+            icon: const Icon(Icons.tune, color: AppColors.textSecondary),
+            onPressed: () => _showFilterSheet(state),
+          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 16),
         ),
       ),
     );
   }
 
-  Widget _buildCategoryChips() {
+  // ── Type chips ────────────────────────────────────────────────────────
+
+  Widget _buildChips(MapState state) {
+    Set<FacilityType> active = {};
+    if (state is MapLoaded) active = state.activeFilters;
+    if (state is MapRoutingLoading) active = state.previous.activeFilters;
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
-        children: [
-          _chipItem(Icons.local_hospital, "Clinics", 0),
-          const SizedBox(width: 8),
-          _chipItem(Icons.local_pharmacy, "Pharmacies", 1),
-          const SizedBox(width: 8),
-          _chipItem(Icons.science, "Labs", 2),
-        ],
+        children: FacilityType.values.map((type) {
+          final isActive = active.isEmpty || active.contains(type);
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: GestureDetector(
+              onTap: () {
+                final newFilters = Set<FacilityType>.from(active);
+                if (active.isEmpty) {
+                  // Was showing all → activate only this type
+                  newFilters.addAll(FacilityType.values);
+                  newFilters.remove(type);
+                } else if (newFilters.contains(type)) {
+                  newFilters.remove(type);
+                  if (newFilters.isEmpty) {
+                    context.read<MapCubit>().setFilters({});
+                    return;
+                  }
+                } else {
+                  newFilters.add(type);
+                  if (newFilters.length == FacilityType.values.length) {
+                    context.read<MapCubit>().setFilters({});
+                    return;
+                  }
+                }
+                context.read<MapCubit>().setFilters(newFilters);
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: isActive ? AppColors.primary : Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.black12),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _chipIcon(type),
+                      size: 16,
+                      color: isActive ? Colors.white : AppColors.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      type.filterLabel,
+                      style: TextStyle(
+                        color: isActive ? Colors.white : Colors.black87,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
 
-  Widget _chipItem(IconData icon, String label, int index) {
-    final isActive = _activeCategoryIndex == index;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _activeCategoryIndex = _activeCategoryIndex == index ? -1 : index;
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive ? AppColors.primary : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.black12),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 16, color: isActive ? Colors.white : AppColors.primary),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: isActive ? Colors.white : Colors.black,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
+  // ── State listener ────────────────────────────────────────────────────
+
+  Future<void> _onStateChange(BuildContext context, MapState state) async {
+    if (state is MapError) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(state.message), backgroundColor: Colors.red),
+      );
+    }
+
+    if (state is MapLoaded && state.routePoints.isNotEmpty) {
+      // Zoom to fit the route
+      await _fitPolylineBounds(state.routePoints);
+    }
+
+    if (state is MapLoaded &&
+        state.userLocation != null &&
+        state.routePoints.isEmpty) {
+      // On first load, animate to user
+      final ctrl = await _mapController.future;
+      await ctrl.animateCamera(
+        CameraUpdate.newLatLngZoom(state.userLocation!, 13),
+      );
+    }
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────
+
+  Future<void> _fitPolylineBounds(List<LatLng> points) async {
+    if (points.isEmpty) return;
+    double minLat = points.first.latitude;
+    double maxLat = points.first.latitude;
+    double minLng = points.first.longitude;
+    double maxLng = points.first.longitude;
+    for (final p in points) {
+      if (p.latitude < minLat) minLat = p.latitude;
+      if (p.latitude > maxLat) maxLat = p.latitude;
+      if (p.longitude < minLng) minLng = p.longitude;
+      if (p.longitude > maxLng) maxLng = p.longitude;
+    }
+    final bounds = LatLngBounds(
+      southwest: LatLng(minLat, minLng),
+      northeast: LatLng(maxLat, maxLng),
+    );
+    final ctrl = await _mapController.future;
+    await ctrl.animateCamera(CameraUpdate.newLatLngBounds(bounds, 80));
+  }
+
+  Future<void> _recenterToUser() async {
+    final cubit = context.read<MapCubit>();
+    await cubit.recenterToUser();
+    final s = cubit.state;
+    LatLng? loc;
+    if (s is MapLoaded) loc = s.userLocation;
+    if (s is MapRoutingLoading) loc = s.previous.userLocation;
+    if (loc != null) {
+      final ctrl = await _mapController.future;
+      await ctrl.animateCamera(CameraUpdate.newLatLngZoom(loc, 14));
+    }
+  }
+
+  void _showDetailSheet(FacilityEntity facility) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => BlocProvider.value(
+        value: context.read<MapCubit>(),
+        child: FacilityDetailSheet(facility: facility),
       ),
     );
+  }
+
+  void _showFilterSheet(MapState state) {
+    Set<FacilityType> current = {};
+    if (state is MapLoaded) current = state.activeFilters;
+    if (state is MapRoutingLoading) current = state.previous.activeFilters;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => MapFilterSheet(
+        initialFilters: current,
+        onApply: (filters) => context.read<MapCubit>().setFilters(filters),
+      ),
+    );
+  }
+
+  IconData _chipIcon(FacilityType type) {
+    switch (type) {
+      case FacilityType.hospital:
+        return Icons.local_hospital_outlined;
+      case FacilityType.clinic:
+        return Icons.medical_services_outlined;
+      case FacilityType.pharmacy:
+        return Icons.local_pharmacy_outlined;
+    }
   }
 }

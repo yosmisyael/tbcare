@@ -1,3 +1,7 @@
+import 'package:TBConsult/features/maps/data/repositories/facility_repository_impl.dart';
+import 'package:TBConsult/features/maps/domain/repositories/facility_repository.dart';
+import 'package:TBConsult/features/maps/domain/usecases/facility_usecases.dart';
+import 'package:TBConsult/features/maps/presentation/cubit/map_cubit.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get_it/get_it.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -46,6 +50,26 @@ Future<void> init() async {
   // ── Network ────────────────────────────────────────────────────────────
   await DioClient.instance.initialize(sharedPrefs);
   sl.registerLazySingleton<DioClient>(() => DioClient.instance);
+
+  // ── Maps: Facility Repository ──────────────────────────────────────────
+  sl.registerLazySingleton<FacilityRepository>(
+        () => FacilityRepositoryImpl(
+      dio: sl<DioClient>().dio,
+      googleMapsApiKey: dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '',
+    ),
+  );
+
+  // ── Maps: Use Cases ────────────────────────────────────────────────────
+  sl.registerLazySingleton(() => GetFacilitiesUseCase(sl()));
+  sl.registerLazySingleton(() => GetRouteUseCase(sl()));
+
+  // ── Maps: Cubit ────────────────────────────────────────────────────────
+  sl.registerFactory(
+        () => MapCubit(
+      getFacilitiesUseCase: sl(),
+      getRouteUseCase: sl(),
+    ),
+  );
 
   // ── Health Hub data sources ────────────────────────────────────────────
   final tbKnowledgeDataSource = TBKnowledgeLocalDataSourceImpl();

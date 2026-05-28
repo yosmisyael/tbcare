@@ -1,3 +1,9 @@
+import 'package:TBConsult/features/auth/data/data_sources/auth_local_data_source.dart';
+import 'package:TBConsult/features/auth/data/data_sources/auth_remote_data_source.dart';
+import 'package:TBConsult/features/auth/data/repositories/auth_repository_impl.dart';
+import 'package:TBConsult/features/auth/domain/repositories/auth_repository.dart';
+import 'package:TBConsult/features/auth/domain/usecases/auth_usecases.dart';
+import 'package:TBConsult/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:TBConsult/features/maps/data/repositories/facility_repository_impl.dart';
 import 'package:TBConsult/features/maps/domain/repositories/facility_repository.dart';
 import 'package:TBConsult/features/maps/domain/usecases/facility_usecases.dart';
@@ -50,6 +56,38 @@ Future<void> init() async {
   // ── Network ────────────────────────────────────────────────────────────
   await DioClient.instance.initialize(sharedPrefs);
   sl.registerLazySingleton<DioClient>(() => DioClient.instance);
+
+  // ── Auth data sources ──────────────────────────────────────────────────────
+  sl.registerLazySingleton<AuthLocalDataSource>(
+        () => AuthLocalDataSourceImpl(prefs: sl()),
+  );
+  sl.registerLazySingleton<AuthRemoteDataSource>(
+        () => AuthRemoteDataSourceImpl(dio: sl<DioClient>().dio),
+  );
+
+  // ── Auth repository ────────────────────────────────────────────────────────
+  sl.registerLazySingleton<AuthRepository>(
+        () => AuthRepositoryImpl(
+      remoteDataSource: sl(),
+      localDataSource: sl(),
+    ),
+  );
+
+  // ── Auth use cases ─────────────────────────────────────────────────────────
+  sl.registerLazySingleton(() => RegisterUseCase(sl()));
+  sl.registerLazySingleton(() => LoginUseCase(sl()));
+  sl.registerLazySingleton(() => GetSavedTokenUseCase(sl()));
+  sl.registerLazySingleton(() => LogoutUseCase(sl()));
+
+  // ── Auth cubit — singleton so splash + login share the same instance ───────
+  sl.registerLazySingleton(
+        () => AuthCubit(
+      registerUseCase: sl(),
+      loginUseCase: sl(),
+      getSavedTokenUseCase: sl(),
+      logoutUseCase: sl(),
+    ),
+  );
 
   // ── Maps: Facility Repository ──────────────────────────────────────────
   sl.registerLazySingleton<FacilityRepository>(

@@ -11,6 +11,10 @@ import 'package:uuid/uuid.dart';
 ///   • Base URL from BACKEND_BASE_URL env var
 ///   • Automatic JWT acquisition + silent refresh on 401
 ///   • Android emulator localhost → 10.0.2.2 rewrite
+///
+/// IMPORTANT: This client is only for your backend.
+/// Never pass it to repositories that call external APIs (e.g. Google Maps).
+/// Those repositories should create their own plain Dio() instance.
 class DioClient {
   DioClient._();
 
@@ -22,7 +26,6 @@ class DioClient {
 
   static const _uuid = Uuid();
 
-  /// Must be called once in [init()] before any API call.
   Future<void> initialize(SharedPreferences prefs) async {
     _prefs = prefs;
 
@@ -61,7 +64,8 @@ class DioClient {
     try {
       final parts = token.split('.');
       if (parts.length != 3) return true;
-      final payload = utf8.decode(base64.decode(base64Url.normalize(parts[1])));
+      final payload =
+      utf8.decode(base64.decode(base64Url.normalize(parts[1])));
       final map = jsonDecode(payload) as Map<String, dynamic>;
       if (map.containsKey('exp')) {
         final expiry =
@@ -87,7 +91,6 @@ class DioClient {
       await _prefs.setString('device_user_id', deviceUserId);
     }
 
-    // Use plain Dio (no interceptor) to avoid infinite recursion
     final plain = Dio(BaseOptions(baseUrl: _resolveBaseUrl()));
     final response = await plain.post<Map<String, dynamic>>(
       '/v1/auth/token',
@@ -108,7 +111,7 @@ class DioClient {
       final token = await _getToken();
       options.headers['Authorization'] = 'Bearer $token';
     } catch (_) {
-      // Proceed without token; server will return 401 which _onError handles
+      // Proceed without token; server will return 401 handled in _onError
     }
     handler.next(options);
   }

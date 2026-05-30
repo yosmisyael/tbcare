@@ -9,13 +9,22 @@ import 'package:TBConsult/features/maps/domain/entities/facility_entity.dart';
 import 'package:TBConsult/features/maps/domain/repositories/facility_repository.dart';
 
 class FacilityRepositoryImpl implements FacilityRepository {
-  final Dio dio;
   final String googleMapsApiKey;
 
-  const FacilityRepositoryImpl({
-    required this.dio,
-    required this.googleMapsApiKey,
-  });
+  /// Dedicated plain Dio for Google APIs — no baseUrl, no JWT interceptor.
+  /// Using sl<DioClient>().dio here was the root cause: it has a backend
+  /// baseUrl which overrides absolute URLs, and an auth interceptor that
+  /// injects Bearer tokens Google rejects with REQUEST_DENIED.
+  final Dio _googleDio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 30),
+      // No baseUrl — absolute URLs are used as-is
+      // No Content-Type header — Google expects no Authorization header
+    ),
+  );
+
+  FacilityRepositoryImpl({required this.googleMapsApiKey});
 
   // ── Facilities ──────────────────────────────────────────────────────────────
 
@@ -46,12 +55,14 @@ class FacilityRepositoryImpl implements FacilityRepository {
     required LatLng destination,
   }) async {
     try {
-      final response = await dio.get<Map<String, dynamic>>(
+      // _googleDio has no baseUrl and no interceptors, so:
+      //   • The absolute URL goes directly to Google
+      //   • No Authorization header is ever added
+      final response = await _googleDio.get<Map<String, dynamic>>(
         'https://maps.googleapis.com/maps/api/directions/json',
         queryParameters: {
           'origin': '${origin.latitude},${origin.longitude}',
-          'destination':
-          '${destination.latitude},${destination.longitude}',
+          'destination': '${destination.latitude},${destination.longitude}',
           'mode': 'driving',
           'key': googleMapsApiKey,
         },
@@ -59,9 +70,13 @@ class FacilityRepositoryImpl implements FacilityRepository {
 
       final data = response.data!;
       final status = data['status'] as String?;
+
       if (status != 'OK') {
+        // Surface the error_message from Google when available
+        final errorMsg = data['error_message'] as String?;
         throw ServerFailure(
-            'Directions API returned status: $status');
+          errorMsg ?? 'Directions API status: $status',
+        );
       }
 
       final routes = data['routes'] as List<dynamic>;
@@ -72,14 +87,14 @@ class FacilityRepositoryImpl implements FacilityRepository {
       return _decodePolyline(overviewPolyline);
     } on DioException catch (e) {
       throw ServerFailure(
-          e.response?.data?.toString() ?? e.message ?? 'Network error');
+        e.response?.data?.toString() ?? e.message ?? 'Network error',
+      );
     }
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
-  double _haversineKm(
-      double lat1, double lon1, double lat2, double lon2) {
+  double _haversineKm(double lat1, double lon1, double lat2, double lon2) {
     const r = 6371.0;
     final dLat = _deg2rad(lat2 - lat1);
     final dLon = _deg2rad(lon2 - lon1);

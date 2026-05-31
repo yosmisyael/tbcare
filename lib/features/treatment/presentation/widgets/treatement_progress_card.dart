@@ -192,7 +192,7 @@ class _ProgressRingCardState extends State<_ProgressRingCard>
                 _StatRow(
                   icon: Icons.local_fire_department,
                   color: Colors.deepOrange,
-                  label: '${item.stats.currentStreak} hari streak',
+                  label: '${item.stats.currentStreak} days streak',
                 ),
                 const SizedBox(height: 6),
                 _StatRow(
@@ -200,15 +200,15 @@ class _ProgressRingCardState extends State<_ProgressRingCard>
                       ? Icons.check_circle_outline
                       : Icons.warning_amber_rounded,
                   color: item.stats.onTrack ? AppColors.primary : Colors.orange,
-                  label: item.stats.onTrack ? 'On track' : 'Perlu perhatian',
+                  label: item.stats.onTrack ? 'On track' : 'Need attention',
                 ),
                 const SizedBox(height: 6),
                 _StatRow(
                   icon: Icons.calendar_today_outlined,
                   color: AppColors.textSecondary,
                   label:
-                      '${item.stats.daysElapsed} hari berlalu'
-                      '${item.stats.daysRemaining != null ? ' · ${item.stats.daysRemaining} tersisa' : ''}',
+                      '${item.stats.daysElapsed} days'
+                      '${item.stats.daysRemaining != null ? ' · ${item.stats.daysRemaining} left' : ''}',
                 ),
               ],
             ),
@@ -308,7 +308,7 @@ class _EmptyProgressCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           const Text(
-            'Belum ada rencana pengobatan aktif',
+            'No active medication plan yet.',
             style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
             textAlign: TextAlign.center,
           ),

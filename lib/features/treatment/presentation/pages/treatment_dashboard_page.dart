@@ -129,11 +129,11 @@ class _DashboardBody extends StatelessWidget {
                 // ── Section label ────────────────────────────────
                 _SectionHeader(
                   title: viewModel.pendingToday.isEmpty
-                      ? 'Status Hari Ini'
-                      : 'Obat Belum Dicatat',
+                      ? 'Today status'
+                      : 'Not logged medication',
                   subtitle: viewModel.pendingToday.isEmpty
                       ? null
-                      : '${viewModel.pendingToday.length} perjalanan perlu dicatat',
+                      : '${viewModel.pendingToday.length} medication journey need to be logged',
                 ),
                 const SizedBox(height: 12),
 
@@ -152,10 +152,10 @@ class _DashboardBody extends StatelessWidget {
 
   String _greeting() {
     final h = DateTime.now().hour;
-    if (h < 12) return 'Selamat Pagi';
-    if (h < 15) return 'Selamat Siang';
-    if (h < 18) return 'Selamat Sore';
-    return 'Selamat Malam';
+    if (h < 12) return 'Good Morning';
+    if (h < 15) return 'Good Afternoon';
+    if (h < 18) return 'Good Evening';
+    return 'Good Night';
   }
 }
 
@@ -250,7 +250,7 @@ class _ErrorBody extends StatelessWidget {
             ElevatedButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh),
-              label: const Text('Coba Lagi'),
+              label: const Text('Try again'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,

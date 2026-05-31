@@ -132,7 +132,7 @@ class _DoseReminderCard extends StatelessWidget {
 
                   // ── Medication names ───────────────────────────
                   Text(
-                    doseNames.isNotEmpty ? doseNames : 'Obat Aktif',
+                    doseNames.isNotEmpty ? doseNames : 'Active Medication',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -343,7 +343,7 @@ class _AllDoneCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           const Text(
-            'Semua obat hari ini sudah dicatat!',
+            'All medications has been logged for today!',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
@@ -353,7 +353,7 @@ class _AllDoneCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Pertahankan konsistensimu. Kamu luar biasa 💪',
+            'Keep your consistency, you are amazing 💪',
             style: TextStyle(
               fontSize: 13,
               color: Colors.white.withOpacity(0.85),

@@ -9,6 +9,11 @@ plugins {
 }
 
 val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { localProperties.load(it) }
+}
+
 val envFile = rootProject.file("../.env")
 if (envFile.exists()) {
     envFile.inputStream().use { localProperties.load(it) }
@@ -30,7 +35,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.tbcare"
+        applicationId = "com.mobile.tbconsult"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -38,7 +43,7 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         
-        manifestPlaceholders["GOOGLE_MAP_API_KEY"] = localProperties.getProperty("GOOGLE_MAP_API_KEY") ?: ""
+        manifestPlaceholders["GOOGLE_MAP_API_KEY"] = localProperties.getProperty("MAPS_API_KEY") ?: ""
     }
 
     buildTypes {

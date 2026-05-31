@@ -47,6 +47,8 @@ class MapCubit extends Cubit<MapState> {
         current.allFacilities,
         current.activeFilters,
         query,
+        current.maxDistanceKm,
+        current.minRating,
       ),
       clearRoute: true,
       clearSelectedFacility: true,
@@ -56,15 +58,30 @@ class MapCubit extends Cubit<MapState> {
 
   // ── Filters ─────────────────────────────────────────────────────────────────
 
-  void setFilters(Set<FacilityType> filters) {
+  void setFilters({
+    Set<FacilityType>? types,
+    double? maxDistanceKm,
+    double? minRating,
+    bool clearMaxDistance = false,
+  }) {
     final current = _loaded;
     if (current == null) return;
+
+    final newTypes = types ?? current.activeFilters;
+    final newMaxDistance = clearMaxDistance ? null : (maxDistanceKm ?? current.maxDistanceKm);
+    final newMinRating = minRating ?? current.minRating;
+
     emit(current.copyWith(
-      activeFilters: filters,
+      activeFilters: newTypes,
+      maxDistanceKm: newMaxDistance,
+      clearMaxDistance: clearMaxDistance,
+      minRating: newMinRating,
       filteredFacilities: _applyFilters(
         current.allFacilities,
-        filters,
+        newTypes,
         current.searchQuery,
+        newMaxDistance,
+        newMinRating,
       ),
       clearRoute: true,
       clearSelectedFacility: true,
@@ -88,32 +105,6 @@ class MapCubit extends Cubit<MapState> {
     emit(current.copyWith(clearSelectedFacility: true, clearRoute: true));
   }
 
-  // ── Navigation / Route ──────────────────────────────────────────────────────
-
-  Future<void> navigateTo(FacilityEntity facility) async {
-    final current = _loaded;
-    if (current == null) return;
-    if (current.userLocation == null) {
-      emit(const MapError(message: 'Lokasi GPS tidak tersedia'));
-      return;
-    }
-
-    emit(MapRoutingLoading(current));
-    try {
-      final points = await getRouteUseCase(GetRouteParams(
-        origin: current.userLocation!,
-        destination: LatLng(facility.lat, facility.lng),
-      ));
-      emit(current.copyWith(
-        routePoints: points,
-        selectedFacility: facility,
-      ));
-    } catch (e) {
-      emit(current.copyWith()); // restore state
-      emit(MapError(message: 'Gagal mengambil rute: ${e.toString()}'));
-    }
-  }
-
   // ── GPS ─────────────────────────────────────────────────────────────────────
 
   Future<void> recenterToUser() async {
@@ -132,7 +123,6 @@ class MapCubit extends Cubit<MapState> {
   MapLoaded? get _loaded {
     final s = state;
     if (s is MapLoaded) return s;
-    if (s is MapRoutingLoading) return s.previous;
     return null;
   }
 
@@ -140,6 +130,8 @@ class MapCubit extends Cubit<MapState> {
       List<FacilityEntity> all,
       Set<FacilityType> filters,
       String query,
+      double? maxDistanceKm,
+      double minRating,
       ) {
     return all.where((f) {
       final matchesType = filters.isEmpty || filters.contains(f.type);
@@ -147,7 +139,10 @@ class MapCubit extends Cubit<MapState> {
       final matchesQuery = q.isEmpty ||
           f.name.toLowerCase().contains(q) ||
           f.address.toLowerCase().contains(q);
-      return matchesType && matchesQuery;
+      final matchesRating = f.rating >= minRating;
+      final matchesDistance = maxDistanceKm == null ||
+          (f.distanceKm != null && f.distanceKm! <= maxDistanceKm);
+      return matchesType && matchesQuery && matchesRating && matchesDistance;
     }).toList();
   }
 

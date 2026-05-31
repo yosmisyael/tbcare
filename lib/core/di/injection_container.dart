@@ -94,9 +94,7 @@ Future<void> init() async {
 
   // ── Maps: Facility Repository ──────────────────────────────────────────
   sl.registerLazySingleton<FacilityRepository>(
-        () => FacilityRepositoryImpl(
-      googleMapsApiKey: dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '',
-    ),
+        () => FacilityRepositoryImpl(),
   );
 
   // ── Maps: Use Cases ────────────────────────────────────────────────────

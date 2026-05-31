@@ -7,6 +7,9 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import 'package:TBConsult/core/di/injection_container.dart' as di;
+import 'package:TBConsult/features/auth/presentation/cubit/auth_cubit.dart';
+
 /// Singleton Dio instance pre-configured with:
 ///   • Base URL from BACKEND_BASE_URL env var
 ///   • Automatic JWT acquisition + silent refresh on 401
@@ -49,56 +52,40 @@ class DioClient {
   // ── Base URL ────────────────────────────────────────────────────────────
 
   String _resolveBaseUrl() {
-    final base = dotenv.env['BACKEND_BASE_URL'] ?? 'http://localhost:8000';
+    final base = dotenv.env['BACKEND_BASE_URL'] ?? 'http://localhost:8000/v1';
+    var url = base;
     if (!kIsWeb && Platform.isAndroid) {
-      return base
+      url = base
           .replaceAll('localhost', '10.0.2.2')
           .replaceAll('127.0.0.1', '10.0.2.2');
     }
-    return base;
+    // Strip trailing slash to prevent double slashes when concatenating paths
+    return url.endsWith('/') ? url.substring(0, url.length - 1) : url;
   }
 
   // ── Auth helpers ────────────────────────────────────────────────────────
 
-  bool _isTokenExpired(String token) {
-    try {
-      final parts = token.split('.');
-      if (parts.length != 3) return true;
-      final payload =
-      utf8.decode(base64.decode(base64Url.normalize(parts[1])));
-      final map = jsonDecode(payload) as Map<String, dynamic>;
-      if (map.containsKey('exp')) {
-        final expiry =
-        DateTime.fromMillisecondsSinceEpoch((map['exp'] as int) * 1000);
-        return DateTime.now()
-            .isAfter(expiry.subtract(const Duration(minutes: 5)));
-      }
-      return false;
-    } catch (_) {
-      return true;
-    }
-  }
-
-  Future<String> _getToken({bool forceRefresh = false}) async {
+  Future<String> _getToken() async {
     final cached = _prefs.getString('backend_jwt_token');
-    if (cached != null && !forceRefresh && !_isTokenExpired(cached)) {
+    if (cached != null) {
       return cached;
     }
+    throw Exception('No authentication token found');
+  }
 
-    var deviceUserId = _prefs.getString('device_user_id');
-    if (deviceUserId == null) {
-      deviceUserId = _uuid.v4();
-      await _prefs.setString('device_user_id', deviceUserId);
+  /// Sends a ping to the backend to refresh the JWT session.
+  /// If successful, the new token is saved locally to extend the session.
+  Future<void> pingAndRefreshToken() async {
+    try {
+      final response = await dio.post<Map<String, dynamic>>('/auth/ping');
+      if (response.statusCode == 200) {
+        final token = response.data!['access_token'] as String;
+        await _prefs.setString('backend_jwt_token', token);
+        debugPrint('DioClient: Token session successfully extended via ping.');
+      }
+    } catch (e) {
+      debugPrint('DioClient: Ping session refresh failed: $e');
     }
-
-    final plain = Dio(BaseOptions(baseUrl: _resolveBaseUrl()));
-    final response = await plain.post<Map<String, dynamic>>(
-      '/v1/auth/token',
-      data: {'user_id': deviceUserId},
-    );
-    final token = response.data!['access_token'] as String;
-    await _prefs.setString('backend_jwt_token', token);
-    return token;
   }
 
   // ── Interceptor callbacks ───────────────────────────────────────────────
@@ -120,16 +107,21 @@ class DioClient {
       DioException err,
       ErrorInterceptorHandler handler,
       ) async {
+    final path = err.requestOptions.path;
+    
+    // Ignore 401 on login/register to prevent duplicate API retries and unwanted auto-logout
+    if (path.contains('/auth/login') || path.contains('/auth/register')) {
+      return handler.next(err);
+    }
+
     if (err.response?.statusCode == 401) {
+      // Trigger auto-logout when token expires or is invalid
       try {
-        final token = await _getToken(forceRefresh: true);
-        final opts = err.requestOptions;
-        opts.headers['Authorization'] = 'Bearer $token';
-        final retryResponse = await dio.fetch(opts);
-        return handler.resolve(retryResponse);
-      } catch (_) {
-        // Fall through to original error
-      }
+        di.sl<AuthCubit>().logout();
+      } catch (_) {}
+      
+      // Do not automatically retry the request on 401 to prevent duplicate API calls.
+      // The user will be redirected to the login screen by the AuthCubit state change.
     }
     handler.next(err);
   }

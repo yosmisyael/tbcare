@@ -36,8 +36,7 @@ class _TreatmentProgressCardState extends State<TreatmentProgressCard> {
             controller: _pageCtrl,
             itemCount: widget.items.length,
             onPageChanged: (i) => setState(() => _page = i),
-            itemBuilder: (_, i) =>
-                _ProgressRingCard(item: widget.items[i]),
+            itemBuilder: (_, i) => _ProgressRingCard(item: widget.items[i]),
           ),
         ),
         if (widget.items.length > 1) ...[
@@ -71,8 +70,10 @@ class _ProgressRingCardState extends State<_ProgressRingCard>
       vsync: this,
       duration: const Duration(milliseconds: 900),
     );
-    _anim = Tween<double>(begin: 0, end: widget.item.progressFraction)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+    _anim = Tween<double>(
+      begin: 0,
+      end: widget.item.progressFraction,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
     _ctrl.forward();
   }
 
@@ -81,8 +82,9 @@ class _ProgressRingCardState extends State<_ProgressRingCard>
     super.didUpdateWidget(old);
     if (old.item.progressFraction != widget.item.progressFraction) {
       _anim = Tween<double>(
-          begin: _anim.value, end: widget.item.progressFraction)
-          .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+        begin: _anim.value,
+        end: widget.item.progressFraction,
+      ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
       _ctrl
         ..reset()
         ..forward();
@@ -124,13 +126,16 @@ class _ProgressRingCardState extends State<_ProgressRingCard>
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  CircularProgressIndicator(
-                    value: _anim.value,
-                    strokeWidth: 11,
-                    backgroundColor: const Color(0xFFD4F0ED),
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                        AppColors.primary),
-                    strokeCap: StrokeCap.round,
+                  SizedBox.expand(
+                    child: CircularProgressIndicator(
+                      value: _anim.value,
+                      strokeWidth: 11,
+                      backgroundColor: const Color(0xFFD4F0ED),
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        AppColors.primary,
+                      ),
+                      strokeCap: StrokeCap.round,
+                    ),
                   ),
                   Column(
                     mainAxisSize: MainAxisSize.min,
@@ -138,7 +143,7 @@ class _ProgressRingCardState extends State<_ProgressRingCard>
                       Text(
                         '${(_anim.value * 100).toInt()}%',
                         style: const TextStyle(
-                          fontSize: 30,
+                          fontSize: 24,
                           fontWeight: FontWeight.bold,
                           color: AppColors.primary,
                         ),
@@ -194,15 +199,15 @@ class _ProgressRingCardState extends State<_ProgressRingCard>
                   icon: item.stats.onTrack
                       ? Icons.check_circle_outline
                       : Icons.warning_amber_rounded,
-                  color:
-                  item.stats.onTrack ? AppColors.primary : Colors.orange,
+                  color: item.stats.onTrack ? AppColors.primary : Colors.orange,
                   label: item.stats.onTrack ? 'On track' : 'Perlu perhatian',
                 ),
                 const SizedBox(height: 6),
                 _StatRow(
                   icon: Icons.calendar_today_outlined,
                   color: AppColors.textSecondary,
-                  label: '${item.stats.daysElapsed} hari berlalu'
+                  label:
+                      '${item.stats.daysElapsed} hari berlalu'
                       '${item.stats.daysRemaining != null ? ' · ${item.stats.daysRemaining} tersisa' : ''}',
                 ),
               ],
@@ -263,8 +268,9 @@ class _PageDots extends StatelessWidget {
           width: active ? 20 : 7,
           height: 7,
           decoration: BoxDecoration(
-            color:
-            active ? AppColors.primary : AppColors.primary.withOpacity(0.25),
+            color: active
+                ? AppColors.primary
+                : AppColors.primary.withOpacity(0.25),
             borderRadius: BorderRadius.circular(4),
           ),
         );
@@ -295,8 +301,11 @@ class _EmptyProgressCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Icon(Icons.medication_outlined,
-              size: 48, color: AppColors.primary.withOpacity(0.3)),
+          Icon(
+            Icons.medication_outlined,
+            size: 48,
+            color: AppColors.primary.withOpacity(0.3),
+          ),
           const SizedBox(height: 12),
           const Text(
             'Belum ada rencana pengobatan aktif',

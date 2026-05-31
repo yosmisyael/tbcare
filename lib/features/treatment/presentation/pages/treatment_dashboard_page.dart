@@ -2,14 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:TBConsult/core/theme/app_colors.dart';
-import 'package:TBConsult/features/auth/presentation/cubit/auth_cubit.dart';
-import 'package:TBConsult/features/auth/presentation/cubit/auth_state.dart';
-import 'package:TBConsult/features/auth/presentation/pages/login_page.dart';
 import 'package:TBConsult/features/treatment/domain/entities/dashboard_entity.dart';
 import 'package:TBConsult/features/treatment/presentation/cubit/dashboard_cubit.dart';
 import 'package:TBConsult/features/treatment/presentation/cubit/dashboard_state.dart';
 import 'package:TBConsult/features/treatment/presentation/widgets/next_dose_card.dart';
 import 'package:TBConsult/features/treatment/presentation/widgets/treatement_progress_card.dart';
+import 'package:TBConsult/core/widgets/shared_sliver_app_bar.dart';
 
 class TreatmentDashboardPage extends StatefulWidget {
   const TreatmentDashboardPage({super.key});
@@ -28,41 +26,38 @@ class _TreatmentDashboardPageState extends State<TreatmentDashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7F6),
-      body: BlocConsumer<DashboardCubit, DashboardState>(
-        listener: _onStateChange,
-        builder: (context, state) {
-          if (state is DashboardLoading) {
-            return const Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
-            );
-          }
-
-          if (state is DashboardError) {
-            return _ErrorBody(
-              message: state.message,
-              onRetry: () => context.read<DashboardCubit>().load(),
-            );
-          }
-
-          DashboardViewModel? vm;
-          bool isSubmitting = false;
-
-          if (state is DashboardLoaded) vm = state.viewModel;
-          if (state is DashboardLogSubmitting) {
-            vm = state.viewModel;
-            isSubmitting = true;
-          }
-
-          if (vm == null) return const SizedBox.shrink();
-
-          return _DashboardBody(
-            viewModel: vm,
-            isSubmitting: isSubmitting,
+    return BlocConsumer<DashboardCubit, DashboardState>(
+      listener: _onStateChange,
+      builder: (context, state) {
+        if (state is DashboardLoading) {
+          return const Center(
+            child: CircularProgressIndicator(color: AppColors.primary),
           );
-        },
-      ),
+        }
+
+        if (state is DashboardError) {
+          return _ErrorBody(
+            message: state.message,
+            onRetry: () => context.read<DashboardCubit>().load(),
+          );
+        }
+
+        DashboardViewModel? vm;
+        bool isSubmitting = false;
+
+        if (state is DashboardLoaded) vm = state.viewModel;
+        if (state is DashboardLogSubmitting) {
+          vm = state.viewModel;
+          isSubmitting = true;
+        }
+
+        if (vm == null) return const SizedBox.shrink();
+
+        return _DashboardBody(
+          viewModel: vm,
+          isSubmitting: isSubmitting,
+        );
+      },
     );
   }
 
@@ -103,41 +98,7 @@ class _DashboardBody extends StatelessWidget {
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
-          // ── App bar ──────────────────────────────────────────────
-          SliverAppBar(
-            backgroundColor: const Color(0xFFF5F7F6),
-            elevation: 0,
-            floating: true,
-            leading: Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: IconButton(
-                icon: const Icon(Icons.menu, color: AppColors.primary),
-                onPressed: () {},
-              ),
-            ),
-            title: const Text(
-              'TBCare',
-              style: TextStyle(
-                color: AppColors.primary,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
-            centerTitle: true,
-            actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: GestureDetector(
-                  onTap: () => _showProfileMenu(context),
-                  child: const CircleAvatar(
-                    backgroundColor: AppColors.primaryLight,
-                    child: Icon(Icons.person, color: Colors.white, size: 20),
-                  ),
-                ),
-              ),
-            ],
-          ),
-
+          const SharedSliverAppBar(),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
             sliver: SliverList(
@@ -195,57 +156,6 @@ class _DashboardBody extends StatelessWidget {
     if (h < 15) return 'Selamat Siang';
     if (h < 18) return 'Selamat Sore';
     return 'Selamat Malam';
-  }
-
-  void _showProfileMenu(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: const Icon(Icons.logout, color: Colors.red),
-              title: const Text('Keluar',
-                  style: TextStyle(
-                      color: Colors.red, fontWeight: FontWeight.w600)),
-              onTap: () {
-                Navigator.pop(context);
-                context.read<AuthCubit>().logout().then((_) {
-                  if (context.mounted) {
-                    Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => BlocProvider.value(
-                          value: context.read<AuthCubit>(),
-                          child: const LoginPage(),
-                        ),
-                      ),
-                          (_) => false,
-                    );
-                  }
-                });
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
   }
 }
 

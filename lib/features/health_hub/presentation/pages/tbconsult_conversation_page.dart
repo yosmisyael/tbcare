@@ -10,6 +10,7 @@ import 'package:TBConsult/features/health_hub/presentation/cubit/conversation_cu
 import 'package:TBConsult/features/health_hub/presentation/cubit/conversation_state.dart';
 import 'package:TBConsult/features/health_hub/presentation/widgets/chat_bubble_widget.dart';
 import 'package:TBConsult/features/health_hub/presentation/widgets/input_bar_widget.dart';
+import 'package:TBConsult/features/health_hub/domain/entities/message.dart';
 import 'conversation_summary_page.dart';
 
 class TBConsultConversationPage extends StatefulWidget {
@@ -31,7 +32,17 @@ class _TBConsultConversationPageState extends State<TBConsultConversationPage> {
   final ImagePicker _picker = ImagePicker();
   final stt.SpeechToText _speech = stt.SpeechToText();
   bool _speechEnabled = false;
-  bool _initialMessageSent = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialMessage != null) {
+      _textController.text = widget.initialMessage!;
+      _textController.selection = TextSelection.fromPosition(
+        TextPosition(offset: _textController.text.length),
+      );
+    }
+  }
 
   @override
   void dispose() {
@@ -75,9 +86,13 @@ class _TBConsultConversationPageState extends State<TBConsultConversationPage> {
             if (mounted) cubit.finishTranscription();
           }
         },
+        debugLogging: true,
       );
       _speechEnabled = initialized;
       if (!initialized) return;
+
+      // Give the system a brief moment to finish setting up locales if it was just initialized
+      await Future.delayed(const Duration(milliseconds: 200));
     }
 
     final state = cubit.state;
@@ -87,14 +102,98 @@ class _TBConsultConversationPageState extends State<TBConsultConversationPage> {
     if (!isCurrentlyListening) {
       _textController.clear();
       cubit.startListening();
+
+      // Resolve the target locale dynamically based on the conversation history first.
+      // For new conversations (empty history), default to Indonesian ('id-ID') to ensure
+      // voice inputs like "cari rumah sakit terdekat" are transcribed in Indonesian,
+      // regardless of the active voice persona's language.
+      String targetLocaleId = 'id-ID';
+      final messages = state.conversation?.messages ?? [];
+      
+      if (messages.isNotEmpty) {
+        final lastMessage = messages.last.content;
+        targetLocaleId = ChatBubbleWidget.detectLanguage(lastMessage);
+        debugPrint("STT: Resolved locale from last message language: $targetLocaleId");
+      } else {
+        debugPrint("STT: Resolved locale defaulting to Indonesian for new conversation: $targetLocaleId");
+      }
+
+      debugPrint("STT: Active Persona name: ${ChatBubbleWidget.activePersona.name}, locale: ${ChatBubbleWidget.activePersona.locale}");
+
+      try {
+        final systemLocales = await _speech.locales();
+        debugPrint("STT: Available system locales: ${systemLocales.map((l) => l.localeId).toList()}");
+        
+        // Canonical translation that treats legacy 'in' (Indonesian) and modern 'id' as equivalent
+        String canonical(String loc) {
+          final clean = loc.toLowerCase().replaceAll(RegExp(r'[-_]'), '');
+          if (clean.startsWith('id')) {
+            return 'in${clean.substring(2)}';
+          }
+          return clean;
+        }
+
+        final targetCanonical = canonical(targetLocaleId);
+        bool foundMatch = false;
+        
+        for (var locale in systemLocales) {
+          if (canonical(locale.localeId) == targetCanonical) {
+            targetLocaleId = locale.localeId;
+            foundMatch = true;
+            debugPrint("STT: Resolved canonical matching locale from system list: $targetLocaleId");
+            break;
+          }
+        }
+
+        // If not found in the list, fallback to language prefix matching (e.g. matching id/in prefix)
+        if (!foundMatch && systemLocales.isNotEmpty) {
+          String prefixCanonical(String loc) {
+            final prefix = loc.split('-')[0].split('_')[0].toLowerCase();
+            return prefix == 'in' ? 'id' : prefix;
+          }
+          
+          final targetPrefix = prefixCanonical(targetLocaleId);
+          for (var locale in systemLocales) {
+            if (prefixCanonical(locale.localeId) == targetPrefix) {
+              targetLocaleId = locale.localeId;
+              foundMatch = true;
+              debugPrint("STT: Resolved prefix matching locale from system list: $targetLocaleId");
+              break;
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint("STT: Error querying available system locales: $e");
+      }
+
+      // Format locale ID properly for Android if it wasn't matched from system list.
+      // If the target is Indonesian and not found, fall back to 'in_ID' which is standard for Android legacy engine.
+      if (Platform.isAndroid) {
+        if (targetLocaleId.toLowerCase().startsWith('id-') || targetLocaleId.toLowerCase() == 'id-id') {
+          targetLocaleId = 'in_ID';
+          debugPrint("STT: Android fallback formatting to legacy Indonesian locale: $targetLocaleId");
+        } else if (targetLocaleId.contains('-')) {
+          targetLocaleId = targetLocaleId.replaceAll('-', '_');
+          debugPrint("STT: Formatted to Android style: $targetLocaleId");
+        }
+      }
+
+      debugPrint("STT: Listening with localeId: $targetLocaleId");
+
       _speech.listen(
+        localeId: targetLocaleId,
+        listenOptions: stt.SpeechListenOptions(
+          partialResults: true,
+        ),
         onResult: (val) {
-          if (mounted && val.finalResult) {
+          if (mounted) {
             _textController.text = val.recognizedWords;
             _textController.selection = TextSelection.fromPosition(
               TextPosition(offset: _textController.text.length),
             );
-            cubit.finishTranscription();
+            if (val.finalResult) {
+              cubit.finishTranscription();
+            }
           }
         },
       );
@@ -166,16 +265,6 @@ class _TBConsultConversationPageState extends State<TBConsultConversationPage> {
             listener: (context, state) {
               _scrollToBottom();
 
-              // Send initial message once conversation is ready
-              if (state is ConversationReady &&
-                  widget.initialMessage != null &&
-                  !_initialMessageSent) {
-                _initialMessageSent = true;
-                context
-                    .read<ConversationCubit>()
-                    .sendTextMessage(widget.initialMessage!);
-              }
-
               // Navigate to summary when summarization completes
               if (state is ConversationSummarized &&
                   state.conversation != null) {
@@ -212,6 +301,14 @@ class _TBConsultConversationPageState extends State<TBConsultConversationPage> {
                   state is ConversationMessaging && state.isTranscribing;
               final isSummarizing = state is ConversationSummarizing;
 
+              int lastUserIndex = -1;
+              for (int i = messages.length - 1; i >= 0; i--) {
+                if (messages[i].role == MessageRole.user) {
+                  lastUserIndex = i;
+                  break;
+                }
+              }
+
               return Column(
                 children: [
                   _buildAppBar(context, isWaiting || isSummarizing),
@@ -229,7 +326,9 @@ class _TBConsultConversationPageState extends State<TBConsultConversationPage> {
                                 return _buildTypingIndicator();
                               }
                               return ChatBubbleWidget(
-                                  message: messages[index]);
+                                message: messages[index],
+                                isLatestUserMessage: index == lastUserIndex,
+                              );
                             },
                           ),
                   ),
@@ -263,7 +362,7 @@ class _TBConsultConversationPageState extends State<TBConsultConversationPage> {
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.close, color: AppColors.textPrimary),
+            icon: const Icon(Icons.close, color: AppColors.primary),
             onPressed: () => Navigator.pop(context),
           ),
           const SizedBox(width: 4),
@@ -304,25 +403,111 @@ class _TBConsultConversationPageState extends State<TBConsultConversationPage> {
               ],
             ),
           ),
-          IconButton(
-            icon: const Icon(
-              Icons.summarize_outlined,
-              color: AppColors.primary,
+          GestureDetector(
+            onTap: () => _showPersonaSelectionDialog(context),
+            child: const CircleAvatar(
+              backgroundColor: AppColors.primary,
+              radius: 20,
+              child:
+                  Icon(Icons.smart_toy, color: AppColors.background, size: 20),
             ),
-            tooltip: 'Generate Summary',
-            onPressed: () {
-              context.read<ConversationCubit>().generateSummary();
-            },
-          ),
-          const CircleAvatar(
-            backgroundColor: AppColors.primary,
-            radius: 20,
-            child:
-                Icon(Icons.smart_toy, color: AppColors.background, size: 20),
           ),
           const SizedBox(width: 8),
         ],
       ),
+    );
+  }
+
+  void _showPersonaSelectionDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AppColors.background,
+              title: const Row(
+                children: [
+                  Icon(Icons.smart_toy, color: AppColors.primary),
+                  SizedBox(width: 8),
+                  Text(
+                    "Select Voice Persona",
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: VoicePersona.all.length,
+                  itemBuilder: (context, index) {
+                    final persona = VoicePersona.all[index];
+                    final isSelected = ChatBubbleWidget.activePersona.name == persona.name;
+
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: isSelected
+                            ? AppColors.primary
+                            : AppColors.primary.withValues(alpha: 0.12),
+                        child: Icon(
+                          persona.isMale ? Icons.face : Icons.face_3,
+                          color: isSelected ? Colors.white : AppColors.primary,
+                        ),
+                      ),
+                      title: Text(
+                        persona.name,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                        ),
+                      ),
+                      subtitle: Text(
+                        persona.description,
+                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      ),
+                      trailing: Icon(
+                        isSelected ? Icons.check_circle : Icons.circle_outlined,
+                        color: isSelected ? AppColors.primary : Colors.grey,
+                        size: 20,
+                      ),
+                      onTap: () {
+                        ChatBubbleWidget.stopSpeaking();
+                        setState(() {
+                          ChatBubbleWidget.activePersona = persona;
+                        });
+                        setDialogState(() {});
+                        Navigator.pop(dialogContext);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text("Voice Persona set to: ${persona.name}"),
+                            behavior: SnackBarBehavior.floating,
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text(
+                    "Close",
+                    style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -334,7 +519,7 @@ class _TBConsultConversationPageState extends State<TBConsultConversationPage> {
           Icon(
             Icons.smart_toy_outlined,
             size: 64,
-            color: AppColors.textSecondary.withValues(alpha: 0.5),
+            color: AppColors.primary.withValues(alpha: 0.5),
           ),
           const SizedBox(height: 16),
           const Text(
@@ -355,11 +540,11 @@ class _TBConsultConversationPageState extends State<TBConsultConversationPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          const CircleAvatar(
-            backgroundColor: Color(0xFFE0E5E4),
+          CircleAvatar(
+            backgroundColor: AppColors.primary.withValues(alpha: 0.12),
             radius: 14,
-            child: Icon(Icons.smart_toy,
-                color: AppColors.textSecondary, size: 16),
+            child: const Icon(Icons.smart_toy,
+                color: AppColors.primary, size: 16),
           ),
           const SizedBox(width: 8),
           Container(
@@ -468,8 +653,8 @@ class _BouncingDotState extends State<_BouncingDot>
           child: Container(
             width: 6,
             height: 6,
-            decoration: const BoxDecoration(
-              color: AppColors.textSecondary,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.6),
               shape: BoxShape.circle,
             ),
           ),

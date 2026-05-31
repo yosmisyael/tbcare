@@ -37,8 +37,6 @@ class ConversationCubit extends Cubit<ConversationState> {
       lastMessageAt: now,
     );
 
-    // Persist the empty shell immediately so hub page can see it
-    await saveConversationUseCase(conversation);
     emit(ConversationReady(conversation: conversation));
   }
 
@@ -107,6 +105,80 @@ class ConversationCubit extends Cubit<ConversationState> {
         userMessage: text.trim(),
         responseMessageId: responseId,
         conversationMessages: conversation.messages,
+      ));
+
+      final withBotMsg = withUserMsg.copyWith(
+        lastMessageAt: assistantMessage.timestamp,
+        messages: [...withUserMsg.messages, assistantMessage],
+      );
+
+      await saveConversationUseCase(withBotMsg);
+      emit(ConversationMessaging(conversation: withBotMsg));
+    } catch (e) {
+      emit(ConversationError(
+        conversation: withUserMsg,
+        message: 'Failed: ${e.toString().replaceAll('Exception: ', '')}',
+      ));
+    }
+  }
+
+  Future<void> editAndResendLatestMessage(String text) async {
+    final conversation = state.conversation;
+    if (conversation == null || text.trim().isEmpty) return;
+
+    if (state is ConversationMessaging &&
+        (state as ConversationMessaging).isWaitingForResponse) {
+      return;
+    }
+
+    final messages = List<Message>.from(conversation.messages);
+    
+    // Find last user message index
+    int lastUserIndex = -1;
+    for (int i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role == MessageRole.user) {
+        lastUserIndex = i;
+        break;
+      }
+    }
+    
+    if (lastUserIndex == -1) return;
+
+    final subList = messages.sublist(0, lastUserIndex);
+
+    final userMessage = Message(
+      id: _uuid.v4(),
+      conversationId: conversation.id,
+      role: MessageRole.user,
+      type: MessageType.text,
+      content: text.trim(),
+      timestamp: DateTime.now(),
+    );
+
+    final updatedTitle = subList.isEmpty
+        ? _generateTitle(text)
+        : conversation.title;
+
+    final withUserMsg = conversation.copyWith(
+      title: updatedTitle,
+      lastMessageAt: userMessage.timestamp,
+      messages: [...subList, userMessage],
+    );
+
+    await saveConversationUseCase(withUserMsg);
+
+    emit(ConversationMessaging(
+      conversation: withUserMsg,
+      isWaitingForResponse: true,
+    ));
+
+    try {
+      final responseId = _uuid.v4();
+      final assistantMessage = await sendMessageUseCase(SendMessageParams(
+        conversationId: conversation.id,
+        userMessage: text.trim(),
+        responseMessageId: responseId,
+        conversationMessages: subList,
       ));
 
       final withBotMsg = withUserMsg.copyWith(

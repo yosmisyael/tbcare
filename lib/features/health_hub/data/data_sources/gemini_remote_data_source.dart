@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:google_generative_ai/google_generative_ai.dart';
 
 import 'package:TBConsult/features/health_hub/domain/entities/message.dart';
-import 'package:TBConsult/features/health_hub/domain/usecases/send_message_usecase.dart';
 
 class GeminiRemoteDataSource {
   final String apiKey;

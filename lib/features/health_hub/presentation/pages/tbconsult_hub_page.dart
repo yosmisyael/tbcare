@@ -2,25 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:TBConsult/core/di/injection_container.dart';
 import 'package:TBConsult/core/theme/app_colors.dart';
+import 'package:TBConsult/core/widgets/shared_sliver_app_bar.dart';
 import 'package:TBConsult/features/health_hub/domain/entities/conversation.dart';
 import 'package:TBConsult/features/health_hub/presentation/cubit/health_hub_cubit.dart';
 import 'package:TBConsult/features/health_hub/presentation/cubit/health_hub_state.dart';
 import 'package:TBConsult/features/health_hub/presentation/cubit/conversation_cubit.dart';
 import 'tbconsult_conversation_page.dart';
+import 'all_conversations_page.dart';
 
 class TBConsultHubPage extends StatelessWidget {
   const TBConsultHubPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      body: SafeArea(
-        child: SingleChildScrollView(
+    return CustomScrollView(
+      slivers: [
+        const SharedSliverAppBar(),
+        SliverToBoxAdapter(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildHeader(context),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20.0),
                 child: Column(
@@ -41,42 +42,11 @@ class TBConsultHubPage extends StatelessWidget {
             ],
           ),
         ),
-      ),
+      ],
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(
-          left: 16.0, right: 20.0, top: 12.0, bottom: 8.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          IconButton(
-            icon: const Icon(Icons.menu, color: AppColors.textPrimary),
-            onPressed: () {},
-          ),
-          const Text(
-            'TBConsult',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppColors.primary,
-            ),
-          ),
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.primaryLight.withValues(alpha: 0.2),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.person, color: AppColors.primary),
-          ),
-        ],
-      ),
-    );
-  }
+  // _buildHeader removed
 
   Widget _buildHeroSection() {
     return Column(
@@ -305,9 +275,24 @@ class TBConsultHubPage extends StatelessWidget {
                       color: AppColors.textPrimary,
                     ),
                   ),
-                  if (conversations.length > 3)
+                  if (conversations.length > 5)
                     TextButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => BlocProvider<HealthHubCubit>(
+                              create: (_) => sl<HealthHubCubit>()
+                                ..loadRecentConversations(limit: 100),
+                              child: const AllConversationsPage(),
+                            ),
+                          ),
+                        ).then((_) {
+                          if (context.mounted) {
+                            context.read<HealthHubCubit>().refresh();
+                          }
+                        });
+                      },
                       style: TextButton.styleFrom(
                         foregroundColor: AppColors.primary,
                         padding: EdgeInsets.zero,
@@ -342,80 +327,126 @@ class TBConsultHubPage extends StatelessWidget {
     final timeLabel = _formatTimeLabel(conversation.lastMessageAt);
     final preview = conversation.lastMessage?.content ?? 'No messages yet';
 
-    return GestureDetector(
-      onTap: () => _navigateToExistingConversation(context, conversation.id),
-      child: Container(
+    return Dismissible(
+      key: Key(conversation.id),
+      direction: DismissDirection.endToStart,
+      confirmDismiss: (direction) async {
+        return await _showDeleteConfirmDialog(context);
+      },
+      onDismissed: (direction) {
+        context.read<HealthHubCubit>().deleteConversation(conversation.id);
+      },
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
         decoration: BoxDecoration(
-          color: AppColors.background,
+          color: Colors.red.shade700,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x0A000000),
-              blurRadius: 10,
-              offset: Offset(0, 4),
-            ),
-          ],
         ),
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: AppColors.primaryLight.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
+        child: const Icon(Icons.delete, color: Colors.white),
+      ),
+      child: GestureDetector(
+        onLongPress: () async {
+          final confirm = await _showDeleteConfirmDialog(context);
+          if (confirm == true && context.mounted) {
+            context.read<HealthHubCubit>().deleteConversation(conversation.id);
+          }
+        },
+        onTap: () => _navigateToExistingConversation(context, conversation.id),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0A000000),
+                blurRadius: 10,
+                offset: Offset(0, 4),
               ),
-              child: const Icon(Icons.chat_bubble_outline,
-                  color: AppColors.primary),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          conversation.title,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
+            ],
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.chat_bubble_outline,
+                    color: AppColors.primary),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            conversation.title,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        timeLabel,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
+                        const SizedBox(width: 8),
+                        Text(
+                          timeLabel,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    preview,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
-                      height: 1.4,
+                      ],
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+                    const SizedBox(height: 6),
+                    Text(
+                      preview,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                        height: 1.4,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Future<bool?> _showDeleteConfirmDialog(BuildContext context) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Hapus Riwayat Chat?', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text('Apakah Anda yakin ingin menghapus riwayat chat ini? Tindakan ini tidak dapat dibatalkan.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Hapus', style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
     );
   }

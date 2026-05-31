@@ -56,71 +56,105 @@ class _MapPageState extends State<MapPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: BlocConsumer<MapCubit, MapState>(
-        listener: _onStateChange,
-        builder: (context, state) {
-          return Stack(
-            children: [
-              // ── Google Map ────────────────────────────────────────
-              _buildMap(state),
+    return BlocConsumer<MapCubit, MapState>(
+      listener: _onStateChange,
+      builder: (context, state) {
+        return Stack(
+          children: [
+            // ── Google Map ────────────────────────────────────────
+            Positioned.fill(child: _buildMap(state)),
 
-              // ── Top overlay: search + chips ───────────────────────
-              Positioned(
-                top: MediaQuery.of(context).padding.top + 8,
-                left: 16,
-                right: 16,
-                child: Column(
-                  children: [
-                    _buildSearchBar(state),
-                    const SizedBox(height: 10),
-                    _buildChips(state),
-                  ],
-                ),
+            // ── Top overlay: search + chips ───────────────────────
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 16,
+              left: 16,
+              right: 16,
+              child: Column(
+                children: [
+                  _buildSearchBar(state),
+                  const SizedBox(height: 10),
+                  _buildChips(state),
+                ],
+              ),
+            ),
+
+            // ── My location FAB ───────────────────────────────────
+            Positioned(
+              bottom: 24,
+              right: 16,
+              child: FloatingActionButton(
+                mini: true,
+                backgroundColor: Colors.white,
+                onPressed: _recenterToUser,
+                child: const Icon(Icons.my_location, color: AppColors.primary),
+              ),
+            ),
+
+            // ── Loading overlay ───────────────────────────────────
+            if (state is MapLoading)
+              Container(
+                color: Colors.white.withOpacity(0.7),
+                child: const Center(child: CircularProgressIndicator()),
               ),
 
-              // ── My location FAB ───────────────────────────────────
-              Positioned(
-                bottom: 24,
-                right: 16,
-                child: FloatingActionButton(
-                  mini: true,
-                  backgroundColor: Colors.white,
-                  onPressed: _recenterToUser,
-                  child: Icon(Icons.my_location, color: AppColors.primary),
+            // ── Error overlay ─────────────────────────────────────
+            if (state is MapError)
+              Container(
+                color: Colors.white.withOpacity(0.85),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.map_outlined,
+                          size: 64, color: Colors.grey),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Gagal memuat peta',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Text(
+                          (state).message,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: () =>
+                            context.read<MapCubit>().initialize(),
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Coba Lagi'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-
-              // ── Loading overlay ───────────────────────────────────
-              if (state is MapLoading)
-                const Center(child: CircularProgressIndicator()),
-            ],
-          );
-        },
-      ),
+          ],
+        );
+      },
     );
   }
 
   // ── Map widget ────────────────────────────────────────────────────────
 
   Widget _buildMap(MapState state) {
-    Set<Marker> markers = {};
     Set<Polyline> polylines = {};
+    Set<Marker> markers = {};
     LatLng? userLocation;
 
-    if (state is MapLoaded || state is MapRoutingLoading) {
-      final loaded = state is MapLoaded
-          ? state
-          : (state as MapRoutingLoading).previous;
-      userLocation = loaded.userLocation;
+    if (state is MapLoaded) {
+      userLocation = state.userLocation;
+      markers = _buildFacilityMarkers(state.filteredFacilities);
 
-      markers = _buildMarkers(loaded.filteredFacilities);
-
-      if (loaded.userLocation != null) {
+      if (state.userLocation != null) {
         markers.add(
           Marker(
             markerId: const MarkerId('_user'),
-            position: loaded.userLocation!,
+            position: state.userLocation!,
             icon: BitmapDescriptor.defaultMarkerWithHue(
               BitmapDescriptor.hueYellow,
             ),
@@ -129,11 +163,11 @@ class _MapPageState extends State<MapPage> {
         );
       }
 
-      if (loaded.routePoints.isNotEmpty) {
+      if (state.routePoints.isNotEmpty) {
         polylines.add(
           Polyline(
             polylineId: const PolylineId('route'),
-            points: loaded.routePoints,
+            points: state.routePoints,
             color: AppColors.primary,
             width: 4,
             patterns: [],
@@ -142,32 +176,42 @@ class _MapPageState extends State<MapPage> {
       }
     }
 
-    return GoogleMap(
-      initialCameraPosition: CameraPosition(
-        target: userLocation ?? _surabayaCenter,
-        zoom: _initialZoom,
+    // Wrap in a SizedBox.expand to ensure GoogleMap fills available space
+    return SizedBox.expand(
+      child: GoogleMap(
+        initialCameraPosition: CameraPosition(
+          target: userLocation ?? _surabayaCenter,
+          zoom: _initialZoom,
+        ),
+        onMapCreated: (c) {
+          if (!_mapController.isCompleted) {
+            _mapController.complete(c);
+          }
+        },
+        markers: markers,
+        polylines: polylines,
+        myLocationEnabled: true,
+        myLocationButtonEnabled: false,
+        zoomControlsEnabled: false,
+        mapToolbarEnabled: false,
+        onTap: (_) => context.read<MapCubit>().clearSelection(),
       ),
-      onMapCreated: (c) => _mapController.complete(c),
-      markers: markers,
-      polylines: polylines,
-      myLocationEnabled: true,
-      myLocationButtonEnabled: false,
-      zoomControlsEnabled: false,
-      mapToolbarEnabled: false,
-      onTap: (_) => context.read<MapCubit>().clearSelection(),
     );
   }
 
-  Set<Marker> _buildMarkers(List<FacilityEntity> facilities) {
-    return facilities.map((f) {
+  Set<Marker> _buildFacilityMarkers(List<FacilityEntity> facilities) {
+    return facilities.map((facility) {
       return Marker(
-        markerId: MarkerId(f.id),
-        position: LatLng(f.lat, f.lng),
-        icon: _markerIcons[f.type] ?? BitmapDescriptor.defaultMarker,
-        infoWindow: InfoWindow(title: f.name, snippet: f.type.label),
+        markerId: MarkerId(facility.id),
+        position: LatLng(facility.lat, facility.lng),
+        icon: _markerIcons[facility.type] ?? BitmapDescriptor.defaultMarker,
+        infoWindow: InfoWindow(
+          title: facility.name,
+          snippet: facility.type.label,
+        ),
         onTap: () {
-          context.read<MapCubit>().selectFacility(f);
-          _showDetailSheet(f);
+          context.read<MapCubit>().selectFacility(facility);
+          _showDetailSheet(facility);
         },
       );
     }).toSet();
@@ -196,7 +240,10 @@ class _MapPageState extends State<MapPage> {
           hintText: 'Search clinics, pharmacies...',
           hintStyle: const TextStyle(color: AppColors.textSecondary),
           border: InputBorder.none,
-          prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
+          prefixIcon: IconButton(
+            icon: const Icon(Icons.menu, color: AppColors.textSecondary),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
           suffixIcon: IconButton(
             icon: const Icon(Icons.tune, color: AppColors.textSecondary),
             onPressed: () => _showFilterSheet(state),
@@ -212,7 +259,6 @@ class _MapPageState extends State<MapPage> {
   Widget _buildChips(MapState state) {
     Set<FacilityType> active = {};
     if (state is MapLoaded) active = state.activeFilters;
-    if (state is MapRoutingLoading) active = state.previous.activeFilters;
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -231,17 +277,17 @@ class _MapPageState extends State<MapPage> {
                 } else if (newFilters.contains(type)) {
                   newFilters.remove(type);
                   if (newFilters.isEmpty) {
-                    context.read<MapCubit>().setFilters({});
+                    context.read<MapCubit>().setFilters(types: {});
                     return;
                   }
                 } else {
                   newFilters.add(type);
                   if (newFilters.length == FacilityType.values.length) {
-                    context.read<MapCubit>().setFilters({});
+                    context.read<MapCubit>().setFilters(types: {});
                     return;
                   }
                 }
-                context.read<MapCubit>().setFilters(newFilters);
+                context.read<MapCubit>().setFilters(types: newFilters);
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
@@ -315,6 +361,7 @@ class _MapPageState extends State<MapPage> {
   // ── Helpers ───────────────────────────────────────────────────────────
 
   Future<void> _fitPolylineBounds(List<LatLng> points) async {
+
     if (points.isEmpty) return;
     double minLat = points.first.latitude;
     double maxLat = points.first.latitude;
@@ -340,7 +387,6 @@ class _MapPageState extends State<MapPage> {
     final s = cubit.state;
     LatLng? loc;
     if (s is MapLoaded) loc = s.userLocation;
-    if (s is MapRoutingLoading) loc = s.previous.userLocation;
     if (loc != null) {
       final ctrl = await _mapController.future;
       await ctrl.animateCamera(CameraUpdate.newLatLngZoom(loc, 14));
@@ -361,8 +407,14 @@ class _MapPageState extends State<MapPage> {
 
   void _showFilterSheet(MapState state) {
     Set<FacilityType> current = {};
-    if (state is MapLoaded) current = state.activeFilters;
-    if (state is MapRoutingLoading) current = state.previous.activeFilters;
+    double? currentMaxDistance;
+    double currentMinRating = 0.0;
+
+    if (state is MapLoaded) {
+      current = state.activeFilters;
+      currentMaxDistance = state.maxDistanceKm;
+      currentMinRating = state.minRating;
+    }
 
     showModalBottomSheet(
       context: context,
@@ -370,7 +422,15 @@ class _MapPageState extends State<MapPage> {
       backgroundColor: Colors.transparent,
       builder: (_) => MapFilterSheet(
         initialFilters: current,
-        onApply: (filters) => context.read<MapCubit>().setFilters(filters),
+        initialMaxDistance: currentMaxDistance,
+        initialMinRating: currentMinRating,
+        onApply: (filters, maxDist, minRat) =>
+            context.read<MapCubit>().setFilters(
+              types: filters,
+              maxDistanceKm: maxDist,
+              clearMaxDistance: maxDist == null,
+              minRating: minRat,
+            ),
       ),
     );
   }

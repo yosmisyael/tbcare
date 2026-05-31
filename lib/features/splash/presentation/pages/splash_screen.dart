@@ -73,7 +73,7 @@ class _SplashScreenState extends State<SplashScreen>
         if (state is AuthAuthenticated) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => const OuterShell()),
+            MaterialPageRoute(builder: (_) => OuterShell()),
           );
         }
         if (state is AuthUnauthenticated) {

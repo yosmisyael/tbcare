@@ -7,17 +7,19 @@ import 'health_hub_state.dart';
 class HealthHubCubit extends Cubit<HealthHubState> {
   final GetConversationsUseCase getConversations;
   final ConversationRepository conversationRepository;
+  int _lastLimit = 10;
 
   HealthHubCubit({
     required this.getConversations,
     required this.conversationRepository,
   }) : super(const HealthHubInitial());
 
-  Future<void> loadRecentConversations() async {
+  Future<void> loadRecentConversations({int limit = 10}) async {
+    _lastLimit = limit;
     emit(const HealthHubLoading());
     try {
       final conversations = await getConversations(
-        const GetConversationsParams(limit: 10),
+        GetConversationsParams(limit: limit),
       );
       emit(HealthHubLoaded(recentConversations: conversations));
     } catch (e) {
@@ -28,11 +30,11 @@ class HealthHubCubit extends Cubit<HealthHubState> {
   Future<void> deleteConversation(String id) async {
     try {
       await conversationRepository.deleteConversation(id);
-      await loadRecentConversations();
+      await loadRecentConversations(limit: _lastLimit);
     } catch (e) {
       emit(HealthHubError(message: e.toString()));
     }
   }
 
-  void refresh() => loadRecentConversations();
+  void refresh() => loadRecentConversations(limit: _lastLimit);
 }

@@ -5,11 +5,20 @@ import 'package:TBConsult/features/maps/domain/entities/facility_entity.dart';
 
 class MapFilterSheet extends StatefulWidget {
   final Set<FacilityType> initialFilters;
-  final ValueChanged<Set<FacilityType>> onApply;
+  final double? initialMaxDistance;
+  final double initialMinRating;
+  final void Function(
+    Set<FacilityType> types,
+    double? maxDistance,
+    double minRating,
+  )
+  onApply;
 
   const MapFilterSheet({
     super.key,
     required this.initialFilters,
+    this.initialMaxDistance,
+    required this.initialMinRating,
     required this.onApply,
   });
 
@@ -19,115 +28,246 @@ class MapFilterSheet extends StatefulWidget {
 
 class _MapFilterSheetState extends State<MapFilterSheet> {
   late Set<FacilityType> _selected;
+  double? _maxDistance;
+  late double _minRating;
 
   @override
   void initState() {
     super.initState();
     _selected = Set.from(widget.initialFilters);
+    _maxDistance = widget.initialMaxDistance;
+    _minRating = widget.initialMinRating;
+  }
+
+  void _reset() {
+    setState(() {
+      _selected.clear();
+      _maxDistance = null;
+      _minRating = 0.0;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.68,
+      ),
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 12,
+        bottom: MediaQuery.of(context).padding.bottom + 20,
+      ),
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // ── Handle ─────────────────────────────────────────────────
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Handle ─────────────────────────────────────────────────
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
-          // ── Header ─────────────────────────────────────────────────
-          Row(
-            children: [
-              const Text(
-                'Map Layers',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            // ── Header ─────────────────────────────────────────────────
+            Row(
+              children: [
+                const Text(
+                  'Filter Places',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: _reset,
+                  child: const Text(
+                    'Reset',
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const Text(
+              'Show places by distance, rating, and facility type.',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 18),
+
+            // ── Distance Slider ─────────────────────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Max Distance',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  _maxDistance == null
+                      ? 'Any'
+                      : '${_maxDistance!.toStringAsFixed(1)} km',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+            Slider(
+              value: _maxDistance ?? 50.0,
+              min: 1,
+              max: 50,
+              divisions: 49,
+              activeColor: AppColors.primary,
+              inactiveColor: AppColors.primaryLight.withValues(alpha: 0.3),
+              onChanged: (value) {
+                setState(() {
+                  _maxDistance = value;
+                });
+              },
+            ),
+            if (_maxDistance != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => setState(() => _maxDistance = null),
+                  child: const Text('Clear distance limit'),
+                ),
+              )
+            else
+              const SizedBox(height: 16),
+
+            // ── Rating Slider ───────────────────────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Minimum Rating',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.star,
+                      color: AppColors.accentYellow,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _minRating.toStringAsFixed(1),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            Slider(
+              value: _minRating,
+              min: 0,
+              max: 5,
+              divisions: 10,
+              activeColor: AppColors.primary,
+              inactiveColor: AppColors.primaryLight.withValues(alpha: 0.3),
+              onChanged: (value) {
+                setState(() {
+                  _minRating = value;
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+
+            // ── Layer options ──────────────────────────────────────────
+            const Text(
+              'Facility Types',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+            _FilterTile(
+              type: FacilityType.hospital,
+              icon: Icons.local_hospital_outlined,
+              iconColor: Colors.blue,
+              iconBg: Colors.blue.shade50,
+              title: 'Health Facilities (DOTS)',
+              subtitle: 'View authorized treatment centers',
+              isSelected:
+                  _selected.isEmpty ||
+                  _selected.contains(FacilityType.hospital),
+              onChanged: (v) => _toggle(FacilityType.hospital, v),
+            ),
+            const SizedBox(height: 8),
+            _FilterTile(
+              type: FacilityType.clinic,
+              icon: Icons.medical_services_outlined,
+              iconColor: Colors.green,
+              iconBg: Colors.green.shade50,
+              title: 'Clinics & Puskesmas',
+              subtitle: 'Community health centers',
+              isSelected:
+                  _selected.isEmpty || _selected.contains(FacilityType.clinic),
+              onChanged: (v) => _toggle(FacilityType.clinic, v),
+            ),
+            const SizedBox(height: 8),
+            _FilterTile(
+              type: FacilityType.pharmacy,
+              icon: Icons.local_pharmacy_outlined,
+              iconColor: Colors.orange,
+              iconBg: Colors.orange.shade50,
+              title: 'Pharmacies',
+              subtitle: 'Medication & prescription services',
+              isSelected:
+                  _selected.isEmpty ||
+                  _selected.contains(FacilityType.pharmacy),
+              onChanged: (v) => _toggle(FacilityType.pharmacy, v),
+            ),
+
+            const SizedBox(height: 20),
+
+            // ── Apply ───────────────────────────────────────────────────
+            ElevatedButton(
+              onPressed: () {
+                widget.onApply(_selected, _maxDistance, _minRating);
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                minimumSize: const Size(double.infinity, 52),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(30),
+                ),
               ),
-              const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          // ── Filter options ──────────────────────────────────────────
-          _FilterTile(
-            type: FacilityType.hospital,
-            icon: Icons.local_hospital_outlined,
-            iconColor: Colors.blue,
-            iconBg: Colors.blue.shade50,
-            title: 'Health Facilities (DOTS)',
-            subtitle: 'View authorized treatment centers',
-            isSelected:
-                _selected.isEmpty || _selected.contains(FacilityType.hospital),
-            onChanged: (v) => _toggle(FacilityType.hospital, v),
-          ),
-          const SizedBox(height: 8),
-          _FilterTile(
-            type: FacilityType.clinic,
-            icon: Icons.medical_services_outlined,
-            iconColor: Colors.green,
-            iconBg: Colors.green.shade50,
-            title: 'Clinics & Puskesmas',
-            subtitle: 'Community health centers',
-            isSelected:
-                _selected.isEmpty || _selected.contains(FacilityType.clinic),
-            onChanged: (v) => _toggle(FacilityType.clinic, v),
-          ),
-          const SizedBox(height: 8),
-          _FilterTile(
-            type: FacilityType.pharmacy,
-            icon: Icons.local_pharmacy_outlined,
-            iconColor: Colors.orange,
-            iconBg: Colors.orange.shade50,
-            title: 'Pharmacies',
-            subtitle: 'Medication & prescription services',
-            isSelected:
-                _selected.isEmpty || _selected.contains(FacilityType.pharmacy),
-            onChanged: (v) => _toggle(FacilityType.pharmacy, v),
-          ),
-
-          const SizedBox(height: 24),
-
-          // ── Apply ───────────────────────────────────────────────────
-          ElevatedButton(
-            onPressed: () {
-              widget.onApply(_selected);
-              Navigator.pop(context);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              minimumSize: const Size(double.infinity, 52),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(30),
+              child: const Text(
+                'Apply Filters',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
-            child: const Text(
-              'Apply Layers',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -46,7 +46,7 @@ class _LoginPageState extends State<LoginPage> {
           if (state is AuthLoginSuccess) {
             Navigator.pushAndRemoveUntil(
               context,
-              MaterialPageRoute(builder: (_) => const OuterShell()),
+              MaterialPageRoute(builder: (_) => OuterShell()),
                   (_) => false,
             );
           }

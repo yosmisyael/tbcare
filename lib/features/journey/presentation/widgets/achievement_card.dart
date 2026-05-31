@@ -21,12 +21,12 @@ class AchievementCard extends StatelessWidget {
         case 'medal':
           iconData = Icons.workspace_premium; // Icon ribbon/medal
           bgColor = const Color(0xFFFBEA68); // Kuning terang
-          iconColor = const Color(0xFF005B4F); // Hijau gelap TBCare
+          iconColor = const Color(0xFF005B4F); // Hijau gelap TBConsult
           break;
         case 'star':
           iconData = Icons.star; // Icon bintang
           bgColor = const Color(0xFFC4F2E8); // Teal/Cyan muda
-          iconColor = const Color(0xFF005B4F); // Hijau gelap TBCare
+          iconColor = const Color(0xFF005B4F); // Hijau gelap TBConsult
           break;
         default:
           iconData = Icons.emoji_events;

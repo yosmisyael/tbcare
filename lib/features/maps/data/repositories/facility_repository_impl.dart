@@ -4,27 +4,13 @@ import 'package:dio/dio.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import 'package:TBConsult/core/error/failures.dart';
+import 'package:TBConsult/core/network/dio_client.dart';
 import 'package:TBConsult/features/maps/data/data_sources/surabaya_facilities_data.dart';
 import 'package:TBConsult/features/maps/domain/entities/facility_entity.dart';
 import 'package:TBConsult/features/maps/domain/repositories/facility_repository.dart';
 
 class FacilityRepositoryImpl implements FacilityRepository {
-  final String googleMapsApiKey;
-
-  /// Dedicated plain Dio for Google APIs — no baseUrl, no JWT interceptor.
-  /// Using sl<DioClient>().dio here was the root cause: it has a backend
-  /// baseUrl which overrides absolute URLs, and an auth interceptor that
-  /// injects Bearer tokens Google rejects with REQUEST_DENIED.
-  final Dio _googleDio = Dio(
-    BaseOptions(
-      connectTimeout: const Duration(seconds: 15),
-      receiveTimeout: const Duration(seconds: 30),
-      // No baseUrl — absolute URLs are used as-is
-      // No Content-Type header — Google expects no Authorization header
-    ),
-  );
-
-  FacilityRepositoryImpl({required this.googleMapsApiKey});
+  FacilityRepositoryImpl();
 
   // ── Facilities ──────────────────────────────────────────────────────────────
 
@@ -47,7 +33,7 @@ class FacilityRepositoryImpl implements FacilityRepository {
               .compareTo(b.distanceKm ?? double.infinity));
   }
 
-  // ── Route (Google Directions API) ───────────────────────────────────────────
+  // ── Route (Proxy through backend) ───────────────────────────────────────────
 
   @override
   Future<List<LatLng>> getRoute({
@@ -55,16 +41,11 @@ class FacilityRepositoryImpl implements FacilityRepository {
     required LatLng destination,
   }) async {
     try {
-      // _googleDio has no baseUrl and no interceptors, so:
-      //   • The absolute URL goes directly to Google
-      //   • No Authorization header is ever added
-      final response = await _googleDio.get<Map<String, dynamic>>(
-        'https://maps.googleapis.com/maps/api/directions/json',
+      final response = await DioClient.instance.dio.get<Map<String, dynamic>>(
+        '/maps/route',
         queryParameters: {
-          'origin': '${origin.latitude},${origin.longitude}',
-          'destination': '${destination.latitude},${destination.longitude}',
-          'mode': 'driving',
-          'key': googleMapsApiKey,
+          'origin': '${origin.latitude.toStringAsFixed(6)},${origin.longitude.toStringAsFixed(6)}',
+          'destination': '${destination.latitude.toStringAsFixed(6)},${destination.longitude.toStringAsFixed(6)}',
         },
       );
 
@@ -72,7 +53,6 @@ class FacilityRepositoryImpl implements FacilityRepository {
       final status = data['status'] as String?;
 
       if (status != 'OK') {
-        // Surface the error_message from Google when available
         final errorMsg = data['error_message'] as String?;
         throw ServerFailure(
           errorMsg ?? 'Directions API status: $status',

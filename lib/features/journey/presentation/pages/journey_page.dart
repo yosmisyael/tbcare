@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import 'package:TBConsult/core/theme/app_colors.dart';
+import 'package:TBConsult/core/widgets/shared_sliver_app_bar.dart';
 import 'package:TBConsult/features/journey/domain/entities/journey_entity.dart';
 import 'package:TBConsult/features/journey/presentation/cubit/journey_cubit.dart';
 import 'package:TBConsult/features/journey/presentation/cubit/journey_state.dart';
@@ -16,8 +18,6 @@ class JourneyPage extends StatefulWidget {
 }
 
 class _JourneyPageState extends State<JourneyPage> {
-  final Color _bgColor = const Color(0xFFF7F9F9);
-
   @override
   void initState() {
     super.initState();
@@ -26,96 +26,117 @@ class _JourneyPageState extends State<JourneyPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _bgColor,
-      appBar: AppBar(
-        backgroundColor: _bgColor,
-        elevation: 0,
-        toolbarHeight: 0, // Sembunyikan appBar default, kita pake custom text
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final journeyCubit = context.read<JourneyCubit>();
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => BlocProvider.value(
-                value: journeyCubit,
-                child: const AddPlanPage(),
+    return Stack(
+      children: [
+        RefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: () async => context.read<JourneyCubit>().refresh(),
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              const SharedSliverAppBar(
+                pinned: true,
+                floating: false,
               ),
-            ),
-          );
-          if (mounted) context.read<JourneyCubit>().refresh();
-        },
-        backgroundColor: const Color(0xFF005B4F),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'My Journeys',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
+              SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text(
+                                'My Journeys',
+                                style: TextStyle(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                'Active medication plans',
+                                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.refresh, color: AppColors.primary),
+                            onPressed: () => context.read<JourneyCubit>().refresh(),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Active medication plans',
-                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                      ),
-                    ],
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.refresh, color: Colors.black54),
-                    onPressed: () => context.read<JourneyCubit>().refresh(),
-                  ),
-                ],
+                    ),
+                    BlocConsumer<JourneyCubit, JourneyState>(
+                      listener: (context, state) {
+                        if (state is JourneyError) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(state.message),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      },
+                      builder: (context, state) {
+                        if (state is JourneyLoading) {
+                          return const Padding(
+                            padding: EdgeInsets.only(top: 64.0),
+                            child: Center(child: CircularProgressIndicator()),
+                          );
+                        }
+                        if (state is JourneyListLoaded) {
+                          return _JourneyList(journeys: state.journeys);
+                        }
+                        if (state is JourneyError) {
+                          return _ErrorView(
+                            message: state.message,
+                            onRetry: () =>
+                                context.read<JourneyCubit>().loadJourneys(),
+                          );
+                        }
+                        return const Padding(
+                          padding: EdgeInsets.only(top: 64.0),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Expanded(
-              child: BlocConsumer<JourneyCubit, JourneyState>(
-                listener: (context, state) {
-                  if (state is JourneyError) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(state.message),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                },
-                builder: (context, state) {
-                  if (state is JourneyLoading)
-                    return const Center(child: CircularProgressIndicator());
-                  if (state is JourneyListLoaded)
-                    return _JourneyList(journeys: state.journeys);
-                  if (state is JourneyError)
-                    return _ErrorView(
-                      message: state.message,
-                      onRetry: () =>
-                          context.read<JourneyCubit>().loadJourneys(),
-                    );
-                  return const Center(child: CircularProgressIndicator());
-                },
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
+        Positioned(
+          bottom: 16,
+          right: 16,
+          child: FloatingActionButton(
+
+              onPressed: () async {
+                final journeyCubit = context.read<JourneyCubit>();
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => BlocProvider.value(
+                      value: journeyCubit,
+                      child: const AddPlanPage(),
+                    ),
+                  ),
+                );
+                if (mounted) context.read<JourneyCubit>().refresh();
+              },
+              backgroundColor: const Color(0xFF005B4F),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: const Icon(Icons.add, color: Colors.white),
+            ),
+          ),
+        ],
+      );
   }
 }
 
@@ -127,50 +148,52 @@ class _JourneyList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (journeys.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.medication_outlined, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              'No active medication plans',
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Press the + button to create one',
-              style: TextStyle(fontSize: 13, color: Colors.grey[500]),
-            ),
-          ],
+      return Padding(
+        padding: const EdgeInsets.only(top: 64.0),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.medication_outlined, size: 64, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              Text(
+                'No active medication plans',
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Press the + button to create one',
+                style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+              ),
+            ],
+          ),
         ),
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: () => context.read<JourneyCubit>().loadJourneys(),
-      child: ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-        itemCount: journeys.length,
-        itemBuilder: (context, index) {
-          final journeyCubit = context.read<JourneyCubit>();
-          final item = journeys[index];
-          return PlanCard(
-            journey: item,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => BlocProvider.value(
-                    value: journeyCubit,
-                    child: ManagementPage(journeyId: item.id),
-                  ),
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      itemCount: journeys.length,
+      itemBuilder: (context, index) {
+        final journeyCubit = context.read<JourneyCubit>();
+        final item = journeys[index];
+        return PlanCard(
+          journey: item,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => BlocProvider.value(
+                  value: journeyCubit,
+                  child: ManagementPage(journeyId: item.id),
                 ),
-              );
-            },
-          );
-        },
-      ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

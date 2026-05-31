@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:TBConsult/core/theme/app_colors.dart';
 import 'package:TBConsult/features/maps/domain/entities/facility_entity.dart';
-import 'package:TBConsult/features/maps/presentation/cubit/map_cubit.dart';
-import 'package:TBConsult/features/maps/presentation/cubit/map_state.dart';
 
 class FacilityDetailSheet extends StatelessWidget {
   final FacilityEntity facility;
@@ -243,46 +240,27 @@ class FacilityDetailSheet extends StatelessWidget {
                   const SizedBox(height: 20),
 
                   // ── Navigate Here ─────────────────────────────────────
-                  BlocBuilder<MapCubit, MapState>(
-                    builder: (context, state) {
-                      final isRouting = state is MapRoutingLoading;
-                      return ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          minimumSize: const Size(double.infinity, 54),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                        ),
-                        onPressed: isRouting
-                            ? null
-                            : () {
-                                context.read<MapCubit>().navigateTo(facility);
-                                Navigator.pop(context);
-                              },
-                        icon: isRouting
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(
-                                Icons.navigation_outlined,
-                                color: Colors.white,
-                              ),
-                        label: Text(
-                          isRouting ? 'Mengambil rute...' : 'Navigate Here',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      );
-                    },
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      minimumSize: const Size(double.infinity, 54),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                    onPressed: () => _openGoogleMaps(facility.lat, facility.lng),
+                    icon: const Icon(
+                      Icons.navigation_outlined,
+                      color: Colors.white,
+                    ),
+                    label: const Text(
+                      'Navigate Here',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
 
                   const SizedBox(height: 10),
@@ -322,8 +300,20 @@ class FacilityDetailSheet extends StatelessWidget {
   }
 
   Future<void> _call(String phone) async {
-    final uri = Uri(scheme: 'tel', path: phone);
+    // Clean phone number: remove '-', ' ', and keep digits and leading '+'
+    final cleanedPhone = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    final uri = Uri.parse('tel:$cleanedPhone');
     if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
+  }
+
+  Future<void> _openGoogleMaps(double lat, double lng) async {
+    final uri = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      // Fallback if unable to launch
       await launchUrl(uri);
     }
   }

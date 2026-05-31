@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import 'package:TBConsult/core/di/injection_container.dart';
 import 'package:TBConsult/core/theme/app_colors.dart';
 import 'package:TBConsult/features/journey/domain/entities/journey_entity.dart';
-import 'package:TBConsult/features/journey/presentation/cubit/journey_cubit.dart';
 import 'package:TBConsult/features/medication/presentation/pages/log_medication_page.dart';
+import 'package:TBConsult/features/medication/presentation/cubit/medication_cubit.dart';
 import 'package:TBConsult/features/treatment/domain/entities/dashboard_entity.dart';
 import 'package:TBConsult/features/treatment/presentation/cubit/dashboard_cubit.dart';
 
@@ -252,8 +253,8 @@ class _DoseReminderCard extends StatelessWidget {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => BlocProvider(
-          create: (_) => context.read<JourneyCubit>(),
+        builder: (_) => BlocProvider<MedicationCubit>(
+          create: (_) => sl<MedicationCubit>(),
           child: LogMedicationPage(journey: journey),
         ),
       ),

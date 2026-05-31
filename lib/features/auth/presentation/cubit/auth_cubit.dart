@@ -76,6 +76,12 @@ class AuthCubit extends Cubit<AuthState> {
           : token.user.email.split('@').first;
       await prefs.setString(_displayNameKey, name);
 
+      if (token.user.profilePhoto != null) {
+        await prefs.setString('user_profile_photo_base64', token.user.profilePhoto!);
+      } else {
+        await prefs.remove('user_profile_photo_base64');
+      }
+
       emit(AuthLoginSuccess(token: token));
     } catch (e) {
       emit(AuthError(message: e.toString()));

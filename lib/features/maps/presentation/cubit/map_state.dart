@@ -25,11 +25,17 @@ class MapLoaded extends MapState {
   /// Currently visible facilities after search + filter.
   final List<FacilityEntity> filteredFacilities;
 
-  /// Active type filter; null = all types shown.
+  /// Active type filter; empty = all types shown.
   final Set<FacilityType> activeFilters;
 
   /// Current search query string.
   final String searchQuery;
+
+  /// Max distance filter in km; null = no distance filter.
+  final double? maxDistanceKm;
+
+  /// Minimum rating filter (0–5).
+  final double minRating;
 
   /// User's device location; null if not yet obtained.
   final LatLng? userLocation;
@@ -45,6 +51,8 @@ class MapLoaded extends MapState {
     required this.filteredFacilities,
     required this.activeFilters,
     required this.searchQuery,
+    this.maxDistanceKm,
+    this.minRating = 0.0,
     this.userLocation,
     this.routePoints = const [],
     this.selectedFacility,
@@ -55,6 +63,9 @@ class MapLoaded extends MapState {
     List<FacilityEntity>? filteredFacilities,
     Set<FacilityType>? activeFilters,
     String? searchQuery,
+    double? maxDistanceKm,
+    bool clearMaxDistance = false,
+    double? minRating,
     LatLng? userLocation,
     List<LatLng>? routePoints,
     FacilityEntity? selectedFacility,
@@ -66,6 +77,8 @@ class MapLoaded extends MapState {
       filteredFacilities: filteredFacilities ?? this.filteredFacilities,
       activeFilters: activeFilters ?? this.activeFilters,
       searchQuery: searchQuery ?? this.searchQuery,
+      maxDistanceKm: clearMaxDistance ? null : (maxDistanceKm ?? this.maxDistanceKm),
+      minRating: minRating ?? this.minRating,
       userLocation: userLocation ?? this.userLocation,
       routePoints: clearRoute ? [] : (routePoints ?? this.routePoints),
       selectedFacility: clearSelectedFacility
@@ -80,18 +93,12 @@ class MapLoaded extends MapState {
     filteredFacilities,
     activeFilters,
     searchQuery,
+    maxDistanceKm,
+    minRating,
     userLocation,
     routePoints,
     selectedFacility,
   ];
-}
-
-class MapRoutingLoading extends MapState {
-  final MapLoaded previous;
-  const MapRoutingLoading(this.previous);
-
-  @override
-  List<Object?> get props => [previous];
 }
 
 class MapError extends MapState {

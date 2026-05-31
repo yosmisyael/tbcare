@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:TBConsult/core/di/injection_container.dart';
+import 'package:TBConsult/features/maps/data/data_sources/facility_photo_service.dart';
 import 'package:TBConsult/features/maps/presentation/widgets/map_filter_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -105,13 +107,18 @@ class _MapPageState extends State<MapPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.map_outlined,
-                          size: 64, color: Colors.grey),
+                      const Icon(
+                        Icons.map_outlined,
+                        size: 64,
+                        color: Colors.grey,
+                      ),
                       const SizedBox(height: 16),
                       const Text(
                         'Gagal memuat peta',
                         style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Padding(
@@ -124,8 +131,7 @@ class _MapPageState extends State<MapPage> {
                       ),
                       const SizedBox(height: 16),
                       ElevatedButton.icon(
-                        onPressed: () =>
-                            context.read<MapCubit>().initialize(),
+                        onPressed: () => context.read<MapCubit>().initialize(),
                         icon: const Icon(Icons.refresh),
                         label: const Text('Coba Lagi'),
                       ),
@@ -361,7 +367,6 @@ class _MapPageState extends State<MapPage> {
   // ── Helpers ───────────────────────────────────────────────────────────
 
   Future<void> _fitPolylineBounds(List<LatLng> points) async {
-
     if (points.isEmpty) return;
     double minLat = points.first.latitude;
     double maxLat = points.first.latitude;
@@ -400,7 +405,10 @@ class _MapPageState extends State<MapPage> {
       backgroundColor: Colors.transparent,
       builder: (_) => BlocProvider.value(
         value: context.read<MapCubit>(),
-        child: FacilityDetailSheet(facility: facility),
+        child: FacilityDetailSheet(
+          facility: facility,
+          photoService: sl<FacilityPhotoService>(),
+        ),
       ),
     );
   }

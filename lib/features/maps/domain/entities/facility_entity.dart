@@ -43,6 +43,10 @@ class FacilityEntity extends Equatable {
   /// Populated at runtime after distance calculation.
   final double? distanceKm;
 
+  /// Populated at runtime by [FacilityPhotoService].
+  /// Either a full https:// URL or null (shows fallback gradient).
+  final String? photoUrl;
+
   const FacilityEntity({
     required this.id,
     required this.name,
@@ -57,26 +61,33 @@ class FacilityEntity extends Equatable {
     this.phone,
     this.tbcUnit,
     this.distanceKm,
+    this.photoUrl,
   });
 
-  FacilityEntity copyWith({double? distanceKm}) => FacilityEntity(
-    id: id,
-    name: name,
-    type: type,
-    address: address,
-    lat: lat,
-    lng: lng,
-    phone: phone,
-    operationalHours: operationalHours,
-    isDotsCertified: isDotsCertified,
-    tbcUnit: tbcUnit,
-    rating: rating,
-    services: services,
-    distanceKm: distanceKm ?? this.distanceKm,
-  );
+  FacilityEntity copyWith({
+    double? distanceKm,
+    String? photoUrl,
+  }) =>
+      FacilityEntity(
+        id: id,
+        name: name,
+        type: type,
+        address: address,
+        lat: lat,
+        lng: lng,
+        phone: phone,
+        operationalHours: operationalHours,
+        isDotsCertified: isDotsCertified,
+        tbcUnit: tbcUnit,
+        rating: rating,
+        services: services,
+        distanceKm: distanceKm ?? this.distanceKm,
+        photoUrl: photoUrl ?? this.photoUrl,
+      );
 
   @override
-  List<Object?> get props =>
-      [id, name, type, address, lat, lng, phone, operationalHours,
-        isDotsCertified, tbcUnit, rating, services, distanceKm];
+  List<Object?> get props => [
+    id, name, type, address, lat, lng, phone, operationalHours,
+    isDotsCertified, tbcUnit, rating, services, distanceKm, photoUrl,
+  ];
 }

@@ -4,6 +4,7 @@ import 'package:TBConsult/features/auth/data/repositories/auth_repository_impl.d
 import 'package:TBConsult/features/auth/domain/repositories/auth_repository.dart';
 import 'package:TBConsult/features/auth/domain/usecases/auth_usecases.dart';
 import 'package:TBConsult/features/auth/presentation/cubit/auth_cubit.dart';
+import 'package:TBConsult/features/maps/data/data_sources/facility_photo_service.dart';
 import 'package:TBConsult/features/maps/data/repositories/facility_repository_impl.dart';
 import 'package:TBConsult/features/maps/domain/repositories/facility_repository.dart';
 import 'package:TBConsult/features/maps/domain/usecases/facility_usecases.dart';
@@ -100,7 +101,7 @@ Future<void> init() async {
   // ── Maps: Use Cases ────────────────────────────────────────────────────
   sl.registerLazySingleton(() => GetFacilitiesUseCase(sl()));
   sl.registerLazySingleton(() => GetRouteUseCase(sl()));
-
+  sl.registerLazySingleton(() => FacilityPhotoService(apiKey: dotenv.env['GOOGLE_MAP_API_KEY'] ?? ''));
   // ── Maps: Cubit ────────────────────────────────────────────────────────
   sl.registerFactory(
         () => MapCubit(

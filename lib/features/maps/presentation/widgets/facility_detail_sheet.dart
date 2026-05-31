@@ -2,12 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:TBConsult/core/theme/app_colors.dart';
+import 'package:TBConsult/features/maps/data/data_sources/facility_photo_service.dart';
 import 'package:TBConsult/features/maps/domain/entities/facility_entity.dart';
+import 'package:TBConsult/features/maps/presentation/widgets/facility_image_widget.dart';
 
 class FacilityDetailSheet extends StatelessWidget {
   final FacilityEntity facility;
 
-  const FacilityDetailSheet({super.key, required this.facility});
+  /// Injected from DI so the in-memory photo cache is shared.
+  final FacilityPhotoService photoService;
+
+  const FacilityDetailSheet({
+    super.key,
+    required this.facility,
+    required this.photoService,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -34,74 +43,53 @@ class FacilityDetailSheet extends StatelessWidget {
               ),
             ),
 
-            // ── Facility image placeholder ─────────────────────────────
-            Container(
-              margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              height: 160,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                color: Colors.grey[200],
-              ),
-              child: Stack(
-                children: [
-                  ClipRRect(
+            // ── Facility image (real photo via Places API) ─────────────
+            Stack(
+              children: [
+                Container(
+                  margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  height: 160,
+                  child: FacilityImageWidget(
+                    facility: facility,
+                    photoService: photoService,
+                    height: 160,
                     borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            _typeColor(facility.type).withOpacity(0.3),
-                            _typeColor(facility.type).withOpacity(0.1),
-                          ],
+                  ),
+                ),
+                // Rating badge — always on top of the image
+                Positioned(
+                  top: 26,
+                  right: 26,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.12),
+                          blurRadius: 6,
                         ),
-                      ),
-                      child: Icon(
-                        _typeIcon(facility.type),
-                        size: 72,
-                        color: _typeColor(facility.type).withOpacity(0.4),
-                      ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.star, size: 14, color: Colors.amber),
+                        const SizedBox(width: 4),
+                        Text(
+                          facility.rating.toStringAsFixed(1),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  // Rating badge
-                  Positioned(
-                    top: 10,
-                    right: 10,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 6,
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.star, size: 14, color: Colors.amber),
-                          const SizedBox(width: 4),
-                          Text(
-                            facility.rating.toStringAsFixed(1),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
 
             Padding(
@@ -115,24 +103,18 @@ class FacilityDetailSheet extends StatelessWidget {
                       if (facility.isDotsCertified) ...[
                         Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
+                              horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
                             color: AppColors.primary.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                              color: AppColors.primary.withOpacity(0.4),
-                            ),
+                                color: AppColors.primary.withOpacity(0.4)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(
-                                Icons.verified,
-                                size: 14,
-                                color: AppColors.primary,
-                              ),
+                              Icon(Icons.verified,
+                                  size: 14, color: AppColors.primary),
                               const SizedBox(width: 4),
                               Text(
                                 'DOTS CERTIFIED',
@@ -151,20 +133,15 @@ class FacilityDetailSheet extends StatelessWidget {
                         if (!facility.isDotsCertified) const Spacer(),
                         Row(
                           children: [
-                            Icon(
-                              Icons.location_on_outlined,
-                              size: 14,
-                              color: Colors.grey[600],
-                            ),
+                            Icon(Icons.location_on_outlined,
+                                size: 14, color: Colors.grey[600]),
                             const SizedBox(width: 2),
                             Text(
                               facility.distanceKm! < 1
                                   ? '${(facility.distanceKm! * 1000).round()} m'
                                   : '${facility.distanceKm!.toStringAsFixed(1)} km',
                               style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 13,
-                              ),
+                                  color: Colors.grey[600], fontSize: 13),
                             ),
                           ],
                         ),
@@ -178,16 +155,15 @@ class FacilityDetailSheet extends StatelessWidget {
                   Text(
                     facility.name,
                     style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                        fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 4),
 
                   // ── Address ──────────────────────────────────────────
                   Text(
                     facility.address,
-                    style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                    style:
+                    TextStyle(color: Colors.grey[600], fontSize: 13),
                   ),
 
                   const SizedBox(height: 14),
@@ -222,18 +198,15 @@ class FacilityDetailSheet extends StatelessWidget {
                     spacing: 6,
                     runSpacing: 6,
                     children: facility.services
-                        .map(
-                          (s) => Chip(
-                            label: Text(
-                              s,
-                              style: const TextStyle(fontSize: 11),
-                            ),
-                            backgroundColor: Colors.grey[100],
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                          ),
-                        )
+                        .map((s) => Chip(
+                      label: Text(s,
+                          style: const TextStyle(fontSize: 11)),
+                      backgroundColor: Colors.grey[100],
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4),
+                      materialTapTargetSize:
+                      MaterialTapTargetSize.shrinkWrap,
+                    ))
                         .toList(),
                   ),
 
@@ -245,21 +218,18 @@ class FacilityDetailSheet extends StatelessWidget {
                       backgroundColor: AppColors.primary,
                       minimumSize: const Size(double.infinity, 54),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
+                          borderRadius: BorderRadius.circular(30)),
                     ),
-                    onPressed: () => _openGoogleMaps(facility.lat, facility.lng),
-                    icon: const Icon(
-                      Icons.navigation_outlined,
-                      color: Colors.white,
-                    ),
+                    onPressed: () =>
+                        _openGoogleMaps(facility.lat, facility.lng),
+                    icon: const Icon(Icons.navigation_outlined,
+                        color: Colors.white),
                     label: const Text(
                       'Navigate Here',
                       style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold),
                     ),
                   ),
 
@@ -300,46 +270,21 @@ class FacilityDetailSheet extends StatelessWidget {
   }
 
   Future<void> _call(String phone) async {
-    // Clean phone number: remove '-', ' ', and keep digits and leading '+'
-    final cleanedPhone = phone.replaceAll(RegExp(r'[^0-9+]'), '');
-    final uri = Uri.parse('tel:$cleanedPhone');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    }
+    final cleaned = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    final uri = Uri.parse('tel:$cleaned');
+    if (await canLaunchUrl(uri)) await launchUrl(uri);
   }
 
   Future<void> _openGoogleMaps(double lat, double lng) async {
-    final uri = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng');
+    final uri = Uri.parse(
+        'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      // Fallback if unable to launch
-      await launchUrl(uri);
-    }
-  }
-
-  IconData _typeIcon(FacilityType type) {
-    switch (type) {
-      case FacilityType.hospital:
-        return Icons.local_hospital_outlined;
-      case FacilityType.clinic:
-        return Icons.medical_services_outlined;
-      case FacilityType.pharmacy:
-        return Icons.local_pharmacy_outlined;
-    }
-  }
-
-  Color _typeColor(FacilityType type) {
-    switch (type) {
-      case FacilityType.hospital:
-        return Colors.blue;
-      case FacilityType.clinic:
-        return Colors.green;
-      case FacilityType.pharmacy:
-        return Colors.orange;
     }
   }
 }
+
+// ── _InfoCard (unchanged) ─────────────────────────────────────────────────────
 
 class _InfoCard extends StatelessWidget {
   final IconData icon;
@@ -369,18 +314,13 @@ class _InfoCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-                ),
+                Text(label,
+                    style:
+                    TextStyle(fontSize: 11, color: Colors.grey[500])),
                 const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
+                Text(value,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13)),
               ],
             ),
           ),
